@@ -17,3 +17,12 @@ fromcameraimports/
 *.jpg
 *.BIA
 build/
+
+# Third-party picture profiles (e.g. Nikon .NCP from nikonpc.com): local only, never published
+nikonpc/
+*.NCP
+*.ncp
+*.NP2
+*.np2
+*.NP3
+*.np3

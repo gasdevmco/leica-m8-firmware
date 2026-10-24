@@ -639,6 +639,74 @@ shooting mode on the camera; the top LCD shows battery and shots left).
 - **Stage 8 camera test (2026-10-23) [tested]:** INFO shows Camera stats, INFO or SET closes it; works.
 - Still open: confirm the temperature "normal" value is °C.
 
+## JPG tone curves and picture profiles from the card (static, 2026-10-23, research only)
+
+Idea under study: INFO screen lists profile files on the card, SET loads one for the next shots
+(until power-off, nothing written to flash). Nothing built.
+
+- **`LUTS_GAMMA` layout (31,760 bytes):** header 0x410 bytes (`<I` 0x0E, 0x410 = curve offset,
+  0x1D0 = matrix block offset, …; 0x10: 15 curves, 0x800 entries; reciprocal table 16384/n at 0x4C;
+  float constants 0.9, 1.6, 2.6, 3.6, 5.0 at 0x1A8; signed 16-bit 3×3-like blocks 0x1D0-0x3EF,
+  probably colour matrices) + **15 curves × 2048 u8** at 0x410 (stride 0x800), ending exactly at the
+  lump end. Curves are steep at the bottom (0, 8, 10, 13 …): input is linear, gamma is built in.
+  Layout 3 rows × 5 (contrast Low..High in each row); row meaning still unknown.
+- **LUT path to the Blackfin:** boot task 0x23DE8 loops `0x23BC4` (load all LUTs) → `0x900B4`
+  (wait for flag 0x177564 bit 1) → again. 0x23BC4 takes the shared file buffer (0x20EE0), reads each
+  entry of the flash "luts" archive (0x8D510) and sends it with 0x90CB0(buf, size, idx):
+  GAIN 0, **GAMMA 1** (0x90D38), WREF 2, BLEMISH 3, OBJ 4, LEICA 6. 0x90CB0 skips a LUT whose bit
+  is set in flag 0x17756C ("LUT %d already loaded; don't reload"), else calls
+  **0x906C4(idx, 1, size, buf)** and sets the bit. 0x906C4 = `BF::CreateFile` (0x9040C, message
+  0x0C on channel 0x177580) → writes of ≤ 0x4000 bytes with explicit offset (0x905EC → 0x90510,
+  message 0x10, op 0x17) → close (0x90644, message 5). **The Blackfin keeps its own copy**: a write
+  into PXA memory changes nothing until the LUT is sent again.
+- **`bfluts` debug command** (handler 0x261E0) = 0x9001C (clear all "loaded" bits of 0x17756C) +
+  0x90040 (set 0x177564 bit 1) → the boot task re-sends every LUT from flash. So a runtime reload
+  is a designed path, and "restore stock curves" can be exactly this. Not yet proven: that the
+  Blackfin applies a re-sent GAMMA to the next shots (camera test needed; no strings in BF.bin).
+- **Card file system = SEGGER emFile** (its FS_ErrorNo2Text / CheckDisk texts at 0xE9E98…). Every
+  API wrapper takes the global FS lock 0xA84DC(0) / 0xA84F0(0) (mutex 0x17FE84, 84 call sites), so
+  a read from the GUI task is serialised against the image writer (it may wait while a save runs).
+  - Directory (same calls as the update finder 0x23104 and the card scanner 0x8C7FC):
+    `OpenDir(path)` 0xA479C (root = "\\" at 0xD46B8) → dir or 0; `ReadDir(dir)` 0xA4804 → entry or 0;
+    `GetName(entry, buf)` 0xA4898 (unbounded strcpy: use a 256-byte buffer); `GetAttr(entry, &u8)`
+    0xA4864 (0x10 = directory, 6 = hidden/system); `GetSize(entry)` 0xA48D8 (= entry+0x108);
+    `CloseDir(dir)` 0xA47D0.
+  - Files: `FOpen(name, "rb")` 0xA6428 ("rb" at 0xD4320) → file or 0; `GetFileSize(f)` 0xA4F6C;
+    `Read(f, buf, n)` 0xA6A84 → bytes read; `Close(f)` 0xA6498 (pattern of 0x22004).
+  - The camera's own card index ([0xD4228], `lscard`) holds only DCIM images (filter 0x39174:
+    DCIM, NNNLEICA, JPG/DNG/RAW), so profile files need their own directory read.
+- **Shared file buffer** [0xD422C] (object 0x14C8FC): `0x20EE0(obj, 0)` waits and returns the
+  buffer, `0x20F18(obj, 0)` returns it or 0 if busy (used by GUI code 0x463F0, 0x499E0 …),
+  `0x20F64(obj)` releases. Large (whole FSL / RedBoot images are read into it). Our reclaimed
+  bf_memtest handlers used it too.
+- **Curve conversion (desktop prototype):** Nikon NCP LUT (257 × BE u16, 0..32767, at 0x78)
+  composed after a stock curve: `new[x] = ncp[stock[x]] × 255 / 32767`. Tri-X on curve 2:
+  input 64/256/1024 → stock 52/122/220 → 72/157/248. Writing the same curve into all 15 slots
+  makes it independent of the Contrast setting and of the unknown row selection.
+  `tools/m8_profile.py` instead applies the profile on top of each of the 15 stock curves
+  (`new = profile(stock)`), so Contrast keeps working; header and colour data unchanged.
+- **Blackfin channel is task-safe:** every request (0x93050 / 0x93060 / 0x93088 → 0x92E70) takes
+  the channel semaphore (obj+0x1214), queues the request, wakes the channel task and waits for
+  its answer. So 0x906C4 can be called from the GUI task.
+- NCP note: in PORTRA the drawn points (0x41…, count at 0x40) are almost straight but the stored
+  257-step table is brighter (52 → 73); its byte 0x3F = 0x1E (Tri-X: 0, table = points). The tool
+  uses the stored table.
+- **Stage 11 (test build, `tools/asm/m8_infoprofile.s`, region bfmem 0x2ABD0-0x2B6E8, stubs at the
+  four command entries as stage 7):** stage 8's Camera stats with a "Tone curve" row; UP: take the
+  shared file buffer (0x20F18, busy → "Busy, try again"), open `\PROFILE.LUT` "rb" (none → "No
+  PROFILE.LUT"), size 31,760 and full read and stock header (else "Not a curve file"), close, then
+  0x906C4(1, 1, 31760, buffer) (< 0 → "Send failed", else "Loaded"), release the buffer. The
+  result is which of six method-table copies the dialog points at (no other state), shown after a
+  redraw (+0x1C). Build `f0192047…`: m8_infotest 62/0, m8_inforender 34/0 (every outcome:
+  calls in order, buffer always released, file always closed, our stores only stack + dialog+0),
+  m8_savetest --stage 11 49/0.
+- **Stage 11 camera test (2026-10-23) [tested]: the Blackfin uses a re-sent GAMMA for the next
+  shot.** `luttests/L1031987.JPG` (before) and `L1031988.JPG` (after UP with DARKTEST.LUT), same
+  scene, 1/180 s, ISO 320. Mean 74.9 → 42.4; DARKTEST applied to the first JPG predicts 42.0.
+  Per level (first → second, predicted): 60 → 6 (7), 90 → 16 (17), 128 → 38 (40), 160 → 69 (73),
+  200 → 126 (134), 240 → 218 (222). So the curve acts as `profile(stock curve)`, exactly the
+  model `tools/m8_profile.py` uses; JPG previews from that tool are close to the camera result.
+
 ## Known 2.024 issue
 
 Some bodies stop saving images after 2.024 (LED blinks, nothing written). Fixed for some

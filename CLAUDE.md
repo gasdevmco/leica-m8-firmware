@@ -13,6 +13,9 @@ stage 8 = Option 2 + INFO (`32e6854e…`, on the author's camera), stage 10 = Op
 (`fa4ae63a…`); both camera-tested (FINDINGS "GUI"). Roll back to stage 4. Without `--info` the options
 are unchanged. Owner's decision 2026-10-23: no histogram / image screens (PLAY has a histogram);
 INFO = Camera stats only; work paused there, waiting for user feedback.
+Tone-curve test (2026-10-23): **stage 11** = stage 8 + UP on Camera stats loads `\PROFILE.LUT`
+(made by `tools/m8_profile.py`) as the Blackfin's GAMMA until power-off (`f0192047…`); camera-tested:
+the next JPG uses the curve (`luttests/`). Roll back to stage 8.
 
 Read `docs/FINDINGS.md` first — it holds every address, offset, hash and conclusion so far.
 For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constraints, firmware leads and step-by-step work plan.
@@ -30,9 +33,9 @@ For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constrain
 - `tools/m8_dngpatch.py` — staged DNG builds: `work/venv/bin/python tools/m8_dngpatch.py firmware/stock/m8-2_014.upd firmware/patched/m8-2_014-stageN.upd --stage N`
 - `tools/m8_infotest.py` — INFO builds (stages 6-8, 10) vs stage 4 / Option 1: real key handler, all keys and GUI states (~10 s):
   `work/venv/bin/python tools/m8_infotest.py [-v]`
-- `tools/m8_inforender.py` — INFO screens (stage 8; `--stage 7`/`10`): runs the real GUI paint code, writes PNGs + checks (~2 s):
+- `tools/m8_inforender.py` — INFO screens (stage 8; `--stage 7`/`10`/`11`): runs the real GUI paint code, writes PNGs + checks (~2 s):
   `work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10] [--out DIR] [-v]`
-- `tools/asm/` — assembly sources of the new code (`m8_header.s`, `m8_dnghook.s`, `m8_info.s`, `m8_infoscreens.s`, `m8_infostats.s`); `tools/m8_asm.py X.s`
+- `tools/asm/` — assembly sources of the new code (`m8_header.s`, `m8_dnghook.s`, `m8_info.s`, `m8_infoscreens.s`, `m8_infostats.s`, `m8_infoprofile.s`); `tools/m8_asm.py X.s`
   assembles one and prints bytes + SHA-256 (the patch script carries the frozen bytes).
 - `tools/m8_savetest.py` — emulated RAW save path, tests every built stage against the camera samples
   (M4 Max: ~9 min all stages, ~3.5 min `--quick`, ~2.5 min `--stage N`):
@@ -40,11 +43,16 @@ For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constrain
 - `tools/m8_reclaim.py` — ranks debug-command handlers as reclaimable space: `work/venv/bin/python tools/m8_reclaim.py`
 - `tools/m8_font.py` — decodes the GUI fonts, renders text or a glyph sheet (read-only):
   `work/venv/bin/python tools/m8_font.py work/split-2.014/GUI_FONT1.bin text "ISO 640" out.png`
+- `tools/m8_profile.py` — picture profile (Nikon .NCP or "x,y" points) → `build/profiles/NAME.LUT`
+  (stock GAMMA with profile∘curve in all 15 slots; contains Leica data, private) + curve plot and JPG
+  previews (desktop only; no camera loader yet, FINDINGS "JPG tone curves"):
+  `work/venv/bin/python tools/m8_profile.py firmware/stock/m8-2_014.upd X.NCP [--preview X.JPG]`
 - `tools/ghidra/` — headless Ghidra scripts (M8Pre seed/options, M8Xrefs refs into ranges, M8Coverage).
   Ghidra 12.1.4 + Temurin JDK 21 unpacked in `work/ghidra/` (re-download if work/ is wiped). Run:
   `JAVA_HOME=work/ghidra/jdk-21.0.12.1+1/Contents/Home work/ghidra/ghidra_12.1.4_PUBLIC/support/analyzeHeadless work/ghidra/proj m8 -import work/split-2.014/PXA.bin -overwrite -loader BinaryLoader -loader-baseAddr 0x20000 -processor ARM:LE:32:v5t -scriptPath tools/ghidra -preScript M8Pre.java -postScript M8Xrefs.java name:lo:hi ...`
 - `tools/m8_wrapdng.py` — desktop prototype of the in-camera RAW→DNG wrap: `python3 tools/m8_wrapdng.py sampleraws/X.RAW`
 - `fromcameraimports/` — staging area for files copied off the camera card (test shots of each build). Keep.
+- `luttests/` — camera JPGs of the tone-curve tests (stage 11). Keep.
 - `sampleraws/` — camera samples (RAW, JPG, lens-cap frames) and DNGs generated from them. Keep.
 - `work/` — scratch output (split lumps etc.), safe to delete.
 - Sibling repo `../m8raw2dng2` — botrx555's RAW→DNG converter; `docs/PROCESSING.md` documents the RAW format.
@@ -79,6 +87,13 @@ For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constrain
     command 0x33 (debug data, a read) via 0x3E238. `tools/m8_infotest.py` (key path) and
     `tools/m8_inforender.py` (paint) fail on any other call or write.
   - Never open other service pages (Production Test, EEPROM Check, Hardware ID's, …) from new code.
+  - Stage 11 only (tone-curve test, owner's OK 2026-10-23; FINDINGS "JPG tone curves"): UP on the
+    Camera stats screen may also take the shared file buffer without waiting (0x20F18; busy -> do
+    nothing) and release it (0x20F64), read one card file `\PROFILE.LUT` with the emFile calls
+    open/size/read/close (0xA6428 / 0xA4F6C / 0xA6A84 / 0xA6498), and send it to the Blackfin as
+    LUT 1 (GAMMA) with 0x906C4 -- only if it is 31,760 bytes with the stock GAMMA header. Never
+    write, rename or delete card files; never call the update / LUT-boot routines (0x23104,
+    0x23BC4, 0x22004 …). Test curves must rise steadily (no inverted curves).
 - Firmware is Leica's copyright: keep private; never publish .upd files or push them to a public remote.
 - Python deps: `python3 -m venv work/venv && work/venv/bin/pip install -r requirements.txt`.
 - New code: assemble with Apple clang `--target=armv5te-none-eabi -march=armv5te -marm`, write it in

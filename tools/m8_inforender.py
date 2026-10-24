@@ -16,7 +16,13 @@ Checks: the frozen stage-7 bytes equal the reassembled source; every store made 
 to the framebuffer or the stack; on_key switches pages, closes through the dialog's own SET path
 with its own method table restored, ignores other keys.
 
-Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10] [--out DIR] [-v]
+Stage 11 (tools/asm/m8_infoprofile.s) adds UP = load \\PROFILE.LUT: the file-buffer, file and
+Blackfin calls are stubs that record their arguments and play each outcome (buffer busy, no
+file, wrong size, short read, wrong header, send failed, ok); checked: the calls made, in order,
+the buffer always released, the file always closed, the table (= result) shown, and that our
+code stores only to the stack and dialog+0.
+
+Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10|11] [--out DIR] [-v]
 Needs:  unicorn, Pillow (work/venv)
 """
 import os, struct, sys
@@ -34,7 +40,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 # stage -> (source, region in m8_dngpatch.REGIONS, frozen-bytes attribute in m8_dngpatch)
 STAGES = {7: ('tools/asm/m8_infoscreens.s', 'bfmem', 'SCREENS_CODE'),
           8: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),
-          10: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE')}   # Option 1 + INFO
+          10: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),   # Option 1 + INFO
+          11: ('tools/asm/m8_infoprofile.s', 'bfmem', 'PROFILE_CODE')}    # + tone-curve load (test)
 STAGE = 8
 SRC = os.path.join(ROOT, STAGES[STAGE][0])
 LO, HI = d.REGIONS[STAGES[STAGE][1]]       # region of the new code
@@ -180,6 +187,8 @@ def main():
     gui = gui_lumps(stock)
     pxa, code = build_pxa(stock)
     sym = symbols()
+    if 'vt_idle' in sym:
+        return main_profile(res, stock, pxa, gui, sym, out, verbose)
     vt_stats = LO + sym['vt_stats']
     vt_hist = LO + sym['vt_hist'] if 'vt_hist' in sym else None
     os.makedirs(out, exist_ok=True)
@@ -218,6 +227,105 @@ def main():
     res.check('SET on "Camera stats": same', key(vt_stats, ord('s')), close)
     first = vt_hist or vt_stats
     others = [k for k in range(256) if k not in (ord('i'), ord('s')) and key(first, k) != (first, [])]
+    res.check('every other key ignored', others, [])
+    print(f'{res.ok} passed, {res.bad} failed; PNGs in {out}')
+    sys.exit(1 if res.bad else 0)
+
+
+RESULTS = ['idle', 'ok', 'nofile', 'badfile', 'busy', 'sendfail']
+FBOBJ, BUF, FILE = 0x3500000, 0x3600000, 0x3700000
+GAMMA_SIZE = 31760
+
+
+def main_profile(res, stock, pxa, gui, sym, out, verbose):
+    """Stage 11: paint every result page; UP in every outcome; INFO / SET close; others ignored."""
+    os.makedirs(out, exist_ok=True)
+    vts = {r: LO + sym['vt_' + r] for r in RESULTS}
+    import m8_profile
+    gamma = m8_profile.stock_gamma(os.path.join(ROOT, 'firmware/stock/m8-2_014.upd'))
+    for name, vt, body_ok in [(r, vts[r], True) for r in RESULTS] + [('nodata', vts['idle'], False)]:
+        s = Screen(pxa, gui, None, body_ok)
+        s.e.w32(DLG, vt)
+        try:
+            s.call(0x605AC, DLG)
+            err = None
+        except Escape as x:
+            err = str(x)
+        res.check(f'{name}: paint runs to the end', err, None)
+        res.check(f'{name}: our stores only to framebuffer / stack', s.bad_writes[:5], [])
+        p = os.path.join(out, f'info{STAGE}-{name}.png')
+        s.png(p)
+        if verbose:
+            print('   ', p, s.calls)
+
+    def up(busy=False, exists=True, size=GAMMA_SIZE, data=gamma, short=False, send=0):
+        s = Screen(pxa, gui, None)
+        e = s.e
+        e.uc.mem_map(FBOBJ, 0x1000)
+        e.uc.mem_map(BUF, 0x10000)
+        e.w32(0xD422C, FBOBJ)
+        calls, stores = [], []
+        def rec(name, ret):
+            def fn(emu, r0, r1, r2):
+                r3 = emu.uc.reg_read(UC_ARM_REG_R3)
+                arg = {'buf_try': (r0, r1), 'buf_free': (r0,), 'fopen': (r0, r1),
+                       'fsize': (r0,), 'fread': (r0, r1, r2), 'fclose': (r0,),
+                       'lut_send': (r0, r1, r2, r3)}[name]
+                if name == 'fopen':
+                    arg = (emu.cstr(r0), emu.cstr(r1))
+                calls.append((name,) + arg)
+                if name == 'fread' and ret:
+                    n = 100 if short else min(r2, len(data))
+                    emu.uc.mem_write(r1, data[:n])
+                    return n
+                if name == 'lut_send':
+                    calls[-1] += (emu.read(r3, r2) == gamma,)
+                return ret
+            fn.__name__ = name
+            return fn
+        for addr, name, ret in [(0x20F18, 'buf_try', 0 if busy else BUF), (0x20F64, 'buf_free', 0),
+                                (0xA6428, 'fopen', FILE if exists else 0), (0xA4F6C, 'fsize', size),
+                                (0xA6A84, 'fread', 1), (0xA6498, 'fclose', 0),
+                                (0x906C4, 'lut_send', send & 0xFFFFFFFF)]:
+            e.stubs[addr] = rec(name, ret)
+        def ours(uc, access, addr, size_, value, _):
+            pc = uc.reg_read(UC_ARM_REG_PC)
+            if LO <= pc < HI and not STACK <= addr < STACK + 0x10000:
+                stores.append(hex(addr))
+        e.uc.hook_add(UC_HOOK_MEM_WRITE, ours)
+        e.w32(DLG, vts['idle'])
+        s.call(LO + sym['on_key'], DLG, ord('u'))
+        shown = [r for r, v in vts.items() if v == e.u32(DLG)]
+        return shown, calls, s.calls, sorted(set(stores))
+
+    take, free = ('buf_try', FBOBJ, 0), ('buf_free', FBOBJ)
+    opn, size_, rd, cls = ('fopen', '\\PROFILE.LUT', 'rb'), ('fsize', FILE), ('fread', FILE, BUF, GAMMA_SIZE), ('fclose', FILE)
+    redraw = [('redraw', DLG, ord('u'))]
+    cases = {
+        'busy':       (dict(busy=True), 'busy', [take]),
+        'no file':    (dict(exists=False), 'nofile', [take, opn, free]),
+        'wrong size': (dict(size=1234), 'badfile', [take, opn, size_, cls, free]),
+        'short read': (dict(short=True), 'badfile', [take, opn, size_, rd, cls, free]),
+        'not GAMMA':  (dict(data=bytes(GAMMA_SIZE)), 'badfile', [take, opn, size_, rd, cls, free]),
+        'send fails': (dict(send=-1), 'sendfail', [take, opn, size_, rd, cls, ('lut_send', 1, 1, GAMMA_SIZE, BUF, True), free]),
+        'ok':         (dict(), 'ok', [take, opn, size_, rd, cls, ('lut_send', 1, 1, GAMMA_SIZE, BUF, True), free]),
+    }
+    for name, (kw, want, want_calls) in cases.items():
+        res.check(f'UP, {name}: result page, calls, redraw, stores only dialog+0',
+                  up(**kw), ([want], want_calls, redraw, [hex(DLG)]))
+
+    s = Screen(pxa, gui, None)
+    def key(page, k):
+        s.calls.clear()
+        s.e.w32(DLG, page)
+        s.call(LO + sym['on_key'], DLG, k)
+        return s.e.u32(DLG), list(s.calls)
+    close = (DLG_VT, [('dialog_key', DLG, ord('s'))])
+    for r in RESULTS:
+        res.check(f'INFO on "{r}": own methods back, dialog SET path', key(vts[r], ord('i')), close)
+        res.check(f'SET on "{r}": same', key(vts[r], ord('s')), close)
+    others = [k for k in range(256) if k not in (ord('i'), ord('s'), ord('u'))
+              and key(vts['ok'], k) != (vts['ok'], [])]
     res.check('every other key ignored', others, [])
     print(f'{res.ok} passed, {res.bad} failed; PNGs in {out}')
     sys.exit(1 if res.bad else 0)
