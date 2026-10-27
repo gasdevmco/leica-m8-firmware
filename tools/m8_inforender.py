@@ -22,7 +22,14 @@ file, wrong size, short read, wrong header, send failed, ok); checked: the calls
 the buffer always released, the file always closed, the table (= result) shown, and that our
 code stores only to the stack and dialog+0.
 
-Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10|11] [--out DIR] [-v]
+Stage 13 (tools/asm/m8_infopicker.s) adds the picture-profile picker: the \\PROFILES directory
+calls are stubs serving a fake card (valid profiles mixed with junk: wrong size, long name, macOS
+"._" files, a sub-directory, other extensions); checked: the list shown, selection and wrap-round,
+SET in every load outcome with the right path, the directory and file always closed, the buffer
+always released, and that our code stores only to the stack, its 16 state bytes, dialog+0 and
+(painting) the framebuffer.
+
+Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10|11|13] [--out DIR] [-v]
 Needs:  unicorn, Pillow (work/venv)
 """
 import os, struct, sys
@@ -41,7 +48,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 STAGES = {7: ('tools/asm/m8_infoscreens.s', 'bfmem', 'SCREENS_CODE'),
           8: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),
           10: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),   # Option 1 + INFO
-          11: ('tools/asm/m8_infoprofile.s', 'bfmem', 'PROFILE_CODE')}    # + tone-curve load (test)
+          11: ('tools/asm/m8_infoprofile.s', 'bfmem', 'PROFILE_CODE'),    # + tone-curve load (test)
+          13: ('tools/asm/m8_infopicker.s', 'bfmem', 'PICKER_CODE')}      # + profile picker
 STAGE = 8
 SRC = os.path.join(ROOT, STAGES[STAGE][0])
 LO, HI = d.REGIONS[STAGES[STAGE][1]]       # region of the new code
@@ -181,12 +189,18 @@ def main():
             args.remove(sys.argv[sys.argv.index(opt) + 1])
     out = sys.argv[sys.argv.index('--out') + 1] if '--out' in sys.argv else os.path.join(ROOT, 'work')
     configure(int(sys.argv[sys.argv.index('--stage') + 1]) if '--stage' in sys.argv else 8)
-    jpg = args[0] if args else os.path.join(ROOT, 'fromcameraimports/L1031949.JPG')
+    import glob
+    found = sorted(glob.glob(os.path.join(ROOT, 'fromcameraimports', '*.JPG')) +
+                   glob.glob(os.path.join(ROOT, 'luttests', '*.JPG')) + glob.glob(os.path.join(ROOT, 'sampleraws', '*.JPG')))
+    jpg = args[0] if args else (os.path.join(ROOT, 'fromcameraimports/L1031949.JPG')
+                                if os.path.exists(os.path.join(ROOT, 'fromcameraimports/L1031949.JPG')) else found[0])
     res = Results(verbose)
     stock = open(os.path.join(ROOT, 'firmware/stock/m8-2_014.upd'), 'rb').read()
     gui = gui_lumps(stock)
     pxa, code = build_pxa(stock)
     sym = symbols()
+    if 'vt_info' in sym:
+        return main_picker(res, stock, pxa, gui, sym, out, verbose)
     if 'vt_idle' in sym:
         return main_profile(res, stock, pxa, gui, sym, out, verbose)
     vt_stats = LO + sym['vt_stats']
@@ -327,6 +341,176 @@ def main_profile(res, stock, pxa, gui, sym, out, verbose):
     others = [k for k in range(256) if k not in (ord('i'), ord('s'), ord('u'))
               and key(vts['ok'], k) != (vts['ok'], [])]
     res.check('every other key ignored', others, [])
+    print(f'{res.ok} passed, {res.bad} failed; PNGs in {out}')
+    sys.exit(1 if res.bad else 0)
+
+
+# fake card for stage 13: (name, attribute, size)
+CARD = [('LEICA.LUT', 0x20, 31760), ('._PORTRA.LUT', 0x20, 4096), ('portra.lut', 0x20, 31760),
+        ('SUB', 0x10, 0), ('NOTES.TXT', 0x20, 31760), ('TOOLONGNAME.LUT', 0x20, 31760),
+        ('Kodachrm.Lut', 0x20, 31760), ('BAD-1.LUT', 0x20, 31760), ('HIDDEN.LUT', 0x22, 31760)]
+SHOWN = ['LEICA', 'PORTRA', 'KODACHRM']
+STATE = 0x1531FC
+
+
+def card(emu_obj, log, files):
+    """emFile directory and file calls on a fake card; log gets (call, args)."""
+    e = emu_obj.e
+    it = {'n': 0}
+    def stub(name, fn):
+        def f(emu, r0, r1, r2):
+            return fn(emu, r0, r1, r2)
+        f.__name__ = name
+        return f
+    def opendir(emu, r0, r1, r2):
+        log.append(('opendir', emu.cstr(r0))); it['n'] = 0
+        return 0x5000 if files is not None else 0
+    def readdir(emu, r0, r1, r2):
+        assert r0 == 0x5000
+        if it['n'] >= len(files):
+            return 0
+        it['n'] += 1
+        return 0x6000 + it['n']
+    def getname(emu, r0, r1, r2):
+        emu.uc.mem_write(r1, files[r0 - 0x6001][0].encode() + b'\0'); return 0
+    def getattr_(emu, r0, r1, r2):
+        emu.uc.mem_write(r1, bytes([files[r0 - 0x6001][1]])); return 0
+    def getsize(emu, r0, r1, r2):
+        return files[r0 - 0x6001][2]
+    def closedir(emu, r0, r1, r2):
+        log.append(('closedir', r0)); return 0
+    for addr, name, fn in [(0xA479C, 'opendir', opendir), (0xA4804, 'readdir', readdir),
+                           (0xA4898, 'getname', getname), (0xA4864, 'getattr', getattr_),
+                           (0xA48D8, 'getsize', getsize), (0xA47D0, 'closedir', closedir)]:
+        e.stubs[addr] = stub(name, fn)
+
+
+def main_picker(res, stock, pxa, gui, sym, out, verbose):
+    """Stage 13: Camera stats + picture-profile picker."""
+    os.makedirs(out, exist_ok=True)
+    import m8_profile
+    gamma = m8_profile.stock_gamma(os.path.join(ROOT, 'firmware/stock/m8-2_014.upd'))
+    vt = LO + sym['vt_info']
+
+    def screen(state, files=CARD, body_ok=True):
+        s = Screen(pxa, gui, None, body_ok)
+        s.e.uc.mem_write(STATE, bytes(state).ljust(16, b'\0'))
+        s.e.w32(DLG, vt)
+        log = []
+        card(s, log, files)
+        stores = []
+        def ours(uc, access, addr, size, value, _):
+            pc = uc.reg_read(UC_ARM_REG_PC)
+            if LO <= pc < HI and not (STACK <= addr < STACK + 0x10000 or STATE <= addr < STATE + 16
+                                      or FB <= addr < FB + 320 * 240 * 3):
+                stores.append(hex(addr))
+        s.e.uc.hook_add(UC_HOOK_MEM_WRITE, ours)
+        return s, log, stores
+
+    def st(s):
+        return s.e.read(STATE, 16)
+
+    # ---- paints
+    name = b'PORTRA'
+    pages = [('stats-stock', [0, 0, 0, 0, 0], True), ('stats-loaded', [0, 1, 0, 0, 0] + list(name), True),
+             ('stats-nodata', [0, 0, 0, 0, 0], False), ('list', [1, 0, 0, 0, 1], True),
+             ('list-loaded', [2, 1, 1, 0, 1] + list(name), True), ('list-busy', [0, 0, 4, 0, 1], True),
+             ('list-wrapsel', [9, 0, 3, 0, 1], True)]
+    for label, state, body_ok in pages:
+        s, log, stores = screen(state, body_ok=body_ok)
+        try:
+            s.call(0x605AC, DLG); err = None
+        except Escape as x:
+            err = str(x)
+        res.check(f'{label}: paint runs to the end', err, None)
+        res.check(f'{label}: our stores only framebuffer / stack / state', stores[:5] + s.bad_writes[:0], [])
+        if label.startswith('list'):
+            res.check(f'{label}: directory opened and closed', [c for c, *_ in log], ['opendir', 'closedir'])
+            res.check(f'{label}: count stored, selection clamped', (st(s)[3], st(s)[0] < 3), (3, True))
+        s.png(os.path.join(out, f'info13-{label}.png'))
+    s, log, stores = screen([0, 0, 0, 0, 1], files=[])
+    s.call(0x605AC, DLG)
+    res.check('empty \\PROFILES: paint, count 0', (st(s)[3], stores), (0, []))
+    s.png(os.path.join(out, 'info13-list-empty.png'))
+    s, log, stores = screen([0, 0, 0, 0, 1], files=None)
+    s.call(0x605AC, DLG)
+    res.check('no \\PROFILES directory: paint, nothing to close', (st(s)[3], [c for c, *_ in log], stores),
+              (0, ['opendir'], []))
+
+    # ---- keys
+    close = (DLG_VT, [('dialog_key', DLG, ord('s'))])
+    def key(state, k, files=CARD, **load):
+        s, log, stores = screen(state, files)
+        calls = []
+        def rec(nm, ret):
+            def fn(emu, r0, r1, r2):
+                r3 = emu.uc.reg_read(UC_ARM_REG_R3)
+                if nm == 'fopen':
+                    calls.append((nm, emu.cstr(r0), emu.cstr(r1)))
+                elif nm == 'fread':
+                    calls.append((nm, r2))
+                    data = load.get('data', gamma)
+                    n = 100 if load.get('short') else min(r2, len(data))
+                    emu.uc.mem_write(r1, data[:n]); return n
+                elif nm == 'lut_send':
+                    calls.append((nm, r0, r1, r2, emu.read(r3, r2) == gamma))
+                else:
+                    calls.append((nm,))
+                return ret
+            fn.__name__ = nm
+            return fn
+        s.e.uc.mem_map(0x3500000, 0x1000); s.e.uc.mem_map(0x3600000, 0x10000)
+        s.e.w32(0xD422C, 0x3500000)
+        for addr, nm, ret in [(0x20F18, 'buf_try', 0 if load.get('busy') else 0x3600000), (0x20F64, 'buf_free', 0),
+                              (0xA6428, 'fopen', 0 if load.get('nofile') else 0x3700000),
+                              (0xA4F6C, 'fsize', load.get('size', 31760)), (0xA6A84, 'fread', 1),
+                              (0xA6498, 'fclose', 0), (0x906C4, 'lut_send', load.get('send', 0) & 0xFFFFFFFF)]:
+            s.e.stubs[addr] = rec(nm, ret)
+        s.calls.clear()
+        s.call(LO + sym['on_key'], DLG, k)
+        return s.e.u32(DLG), s.calls[:], st(s)[:5], calls, [c for c, *_ in log], stores, st(s)
+
+    for page in (0, 1):
+        r = key([0, 0, 0, 0, page], ord('i'))
+        res.check(f'INFO on page {page}: own methods back, dialog SET path', (r[0], r[1]), close)
+    r = key([0, 0, 0, 0, 0], ord('s'))
+    res.check('SET on Camera stats: close', (r[0], r[1], r[3]), close + ([],))
+    r = key([0, 0, 2, 0, 0], ord('u'))
+    res.check('UP on Camera stats: list page, result cleared, redraw', (r[0], r[1], r[2]),
+              (vt, [('redraw', DLG, ord('u'))], bytes([0, 0, 0, 0, 1])))
+    for start, k, want in [(0, 'u', 2), (2, 'd', 0), (1, 'd', 2), (1, 'u', 0), (7, 'd', 0)]:
+        r = key([start, 0, 0, 3, 1], ord(k))
+        res.check(f'{k.upper()} on list from {start} (3 entries): selection {want}, redraw',
+                  (r[2][0], r[1]), (want, [('redraw', DLG, ord('u'))]))
+    r = key([0, 0, 0, 0, 1], ord('d'))
+    res.check('DOWN on an empty list: selection stays 0', r[2][0], 0)
+
+    take, free = ('buf_try',), ('buf_free',)
+    opn, size_, rd, cls = ('fopen', '\\PROFILES\\PORTRA.LUT', 'rb'), ('fsize',), ('fread', 31760), ('fclose',)
+    send = ('lut_send', 1, 1, 31760, True)
+    cases = {
+        'ok':         ({}, 1, [take, opn, size_, rd, cls, send, free]),
+        'busy':       ({'busy': True}, 4, [take]),
+        'no file':    ({'nofile': True}, 2, [take, opn, free]),
+        'wrong size': ({'size': 1234}, 3, [take, opn, size_, cls, free]),
+        'short read': ({'short': True}, 3, [take, opn, size_, rd, cls, free]),
+        'not GAMMA':  ({'data': bytes(31760)}, 3, [take, opn, size_, rd, cls, free]),
+        'send fails': ({'send': -1}, 5, [take, opn, size_, rd, cls, send, free]),
+    }
+    for nm, (kw, want, want_calls) in cases.items():
+        r = key([1, 0, 0, 3, 1], ord('s'), **kw)
+        loaded = (r[6][1], r[6][5:5 + 7]) if want == 1 else (0, bytes(7))
+        res.check(f'SET on list, {nm}: result, calls, dir closed, redraw, stores',
+                  (r[2][2], r[3], r[4], r[1], r[5], loaded),
+                  (want, want_calls, ['opendir', 'closedir'], [('redraw', DLG, ord('u'))], [],
+                   (1, b'PORTRA\0') if want == 1 else (0, bytes(7))))
+    r = key([5, 0, 0, 3, 1], ord('s'))
+    res.check('SET with a stale selection (5 of 3): Not found, no buffer, no file', (r[2][2], r[3]), (2, []))
+    r = key([2, 0, 0, 3, 1], ord('s'))
+    res.check('SET on the third entry loads KODACHRM', r[3][1], ('fopen', '\\PROFILES\\KODACHRM.LUT', 'rb'))
+    others = [k for k in range(256) if k not in (ord('i'), ord('s'), ord('u'), ord('d'))
+              and key([0, 0, 0, 3, 1], k)[:6] != (vt, [], bytes([0, 0, 0, 3, 1]), [], [], [])]
+    res.check('every other key ignored (no calls, no writes)', others, [])
     print(f'{res.ok} passed, {res.bad} failed; PNGs in {out}')
     sys.exit(1 if res.bad else 0)
 

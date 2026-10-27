@@ -18,7 +18,9 @@ stage. Stages are not cumulative: each is a complete build, one flash per stage.
   8      stage 4 + stats, stats key      INFO shows Camera stats               camera-tested 2026-10-23
   10     stats, stats key (no DNG)       Option 1 + INFO Camera stats          camera-tested 2026-10-23
   11     stage 4 + profile, profile key  UP on Camera stats loads \\PROFILE.LUT   camera-tested 2026-10-23
-  12     stage 11 + modern curve         MODERN tone curve as the default        emulator-tested
+  12     stage 11 + modern curve         MODERN tone curve as the default        flashed 2026-10-27; rolled back
+                                         (owner's decision: stock curves stay the default)
+  13     stage 4 + picker, picker key    INFO: Camera stats + profile picker     emulator-tested
 
 Pieces (each in one declared region, REGIONS):
   canary  0x3CEA0 mov r0,#7 -> #0xA5: RAW header u16[3] = 0xA5
@@ -40,6 +42,9 @@ Pieces (each in one declared region, REGIONS):
   profile 0x2ABD0-0x2B6E8 (as screens) -> stubs at the four entries + Camera stats with a tone-curve
           row; UP loads \\PROFILE.LUT into the Blackfin's GAMMA (tools/asm/m8_infoprofile.s), rest undefined fill
   profile key  as info key, to its info_open (also 0x2ABD8)
+  picker  0x2ABD0-0x2B6E8 (as screens) -> stubs at the four entries + Camera stats + picture-profile
+          picker (tools/asm/m8_infopicker.s); 16 state bytes at 0x1531FC (ldimg's filename buffer)
+  picker key   as info key, to its info_open (also 0x2ABD8)
   modern curve  LUTS lump (not PXA): the 15 GAMMA tone curves -> MODERN (tools/m8_profile.py), generated
           from the stock table, checked against MODERN_CURVES_SHA; header and colour data unchanged
 
@@ -274,6 +279,72 @@ PROFILE_CODE_SHA = '882e6a1c89d09921cceb61c81ceb1d7f558b498c73799ecb9eab5e63af38
 PROFILE_ENTRY = 0x2ABD8                    # info_open
 
 
+# tools/asm/m8_infopicker.s at 0x2ABD0 (stubs at the four command entries, Camera stats + profile picker)
+PICKER_CODE = bytes.fromhex(
+    '0000a0e31eff2fe16f0c84e26c0080e20110a0e30fe0a0e13cf49fe5953b84e20120a0e38f20c3e56f0c84e26c0080e2'
+    '0030a0e39930c0e520149fe50430c1e54e0f80e218149fe5001080e50110a0e30fe0a0e10cf49fe50cf49fe5ff1001e2'
+    'f8c39fe50430dce5690051e32200000a730051e30800001a010053e31e00001a10402de90040a0e10fe0a0e1150200ea'
+    '0400a0e11040bde8140000ea750051e3640051131eff2f110020a0e30220cce5010053e30120a0130420cc150b00001a'
+    '0020dce50330dce5000053e30700000a750051e30120420201208212000052e3032082b0030052e10020a0a30020cce5'
+    '002090e57510a0e31cf092e56c239fe5002080e57310a0e364f39fe54cc39fe50410dce5010051e32d01000a510000ea'
+    '10402de910d04de200208de52348a0e108408de50338a0e12338a0e104308de5052d60e21e30a0e30fe0a0e124f39fe5'
+    '10d08de21080bde8f0402de90040a0e10150a0e10260a0e10370a0e10200a0e12318a0e10fe0a0e1fcf29fe5000044e0'
+    '0510a0e10620a0e10730a0e10fe0a0e1e2ffffeaf080bde804e02de504d04de200c08de50fe0a0e1d0f29fe504d08de2'
+    '04f09de410402de9a0429fe50440d4e5bcc29fe50000a0e30010a0e3052da0e31930a0e30fe0a0e1eeffffea010054e3'
+    '0800a0e30410a0e398229fe598329fe50000001a94229fe50fe0a0e1c7ffffea010054e30800a0e3da10a0e380229fe5'
+    '80329fe50000001a7c229fe50fe0a0e1beffffea010054e31080bd182cc29fe50200dce5011040e2040051e31080bd88'
+    '58129fe5002191e754329fe5010050e350329f154e0fa0e30410a0e30fe0a0e1bcffffea1080bde870402de930d04de2'
+    '0040a0e130029fe5000090e5050a80e2c00080e2b01084e20fe0a0e11cf29fe5000050e30600000a0800a0e36410a0e3'
+    '0c229fe50c329fe50fe0a0e19bffffea250000ea00629fe52850a0e3002096e5022086e00c00a0e30510a0e1ec319fe5'
+    '0fe0a0e191ffffea083096e50328a0e12228a0e1022084e0010813e3002092050020d215020813e30400000a040052e3'
+    '0520a083b8119fe5022191e7022081e0041096e5011086e00d00a0e10fe0a0e1a0f19fe54d0fa0e3021045e20d20a0e1'
+    '80319fe50fe0a0e186ffffea0c6086e2225085e2b00055e3dbffff3a0c00a0e3b010a0e370219fe560319fe50fe0a0e1'
+    '6effffeaf4c09fe50000a0e30f00cce50100dce5000050e305208ce20200000a0000d2e5000050e30000001a3c219fe5'
+    '4d0fa0e3ae10a0e318319fe50fe0a0e16cffffea30d08de27080bde80020a0e30230d0e72e0053e30d00000a080052e3'
+    '1d00002a61c043e21a005ce32030433230c043e20a005ce30200003a41c043e21a005ce31400002a0230c1e7012082e2'
+    'eeffffea000052e30f00000a00c0a0e302c0c1e7020080e00130d0e5203083e36c0053e30230d0052030830375005303'
+    '0330d00520308303740053030430d005000053030100a0031eff2f010000a0e31eff2fe10120d1e40120c0e4000052e3'
+    'fbffff1a010040e21eff2fe1e88f0500fc31150090b20200600304008c4f0400b8d10e0068180600ec9609000c9c0900'
+    '408a09004529000064b60200ffff030071b602007ab602006d6b030095b6020020b40200473e030020fd03001c420d00'
+    '38e2030088b30200ffff040040b30200b294030070b30200ec940b00c8b30200d3b30200000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '0000a0e31eff2fe1f0402de941df4de20040a0e10050a0e360019fe50fe0a0e15cf19fe50060b0e12200000a0a0055e3'
+    '1d00002a0600a0e10fe0a0e144f19fe50070b0e11800000a0d10a0e10fe0a0e134f19fe50700a0e1011c8de20fe0a0e1'
+    '28f19fe50001dde5160010e3eeffff1a0700a0e10fe0a0e114f19fe514119fe5010050e1e8ffff1a0d00a0e10c10a0e3'
+    '950101e0011084e00fe0a0e17effffea000050e301508512dfffffea0600a0e10fe0a0e1e0f09fe50500a0e141df8de2'
+    'f080bde8f0412de978d04de20d00a0e10fe0a0e1cbffffea0050a0e1bc609fe50350c6e50070d6e5050057e10070a023'
+    '0070c6e5000055e30600001a0c00a0e35a10a0e398209fe598309fe50fe0a0e1befeffea170000ea0080a0e31240a0e3'
+    '980404e0204084e2070058e10600001a74c09fe50000a0e30410a0e1052da0e31230a0e30fe0a0e1cefeffea0c00a0e3'
+    '980000e000208de01000a0e30410a0e140309fe50fe0a0e1a8feffea018088e2050058e1e8ffff3a78d08de2f081bde8'
+    '00b302009c470a0004480a0098480a0064480a00d8480a00107c0000d0470a00fc311500aeb60200ffff030086310000'
+    '4cd30c0054d30c005cd30c0064d30c00d0a809006c1e0d00b41e0d007ca409006cd30c00ac050600f0a809002cac0200'
+    'd8ac090068ad09006cad09006003040070d30c0074d30c0084ad0200dcac020000000000000000000e00000010040000'
+    'd0010000100400000f000000000800005c50524f46494c4553005c50524f46494c45535c002e4c5554007262000000a0'
+    '0000000000000000000000000000000000000000000000000000a0e31eff2fe15e000000a1000000e40000005e000000'
+    '98000000c80002005a0000008f000000c40000005a0000007d000000dd0001007e000000840000009100000096000000'
+    'a2000000a7000000426f6479206461746120756e617661696c61626c650053686f74732074616b656e00426174746572'
+    '790054656d7065726174757265004c656e7320636f646500546f6e65206375727665004c65696361202873746f636b29'
+    '00256400257300256420c2b04300456d70747900416c6d6f737420656d7074790048616c6600416c6d6f73742066756c'
+    '6c0046756c6c00556e6b6e6f776e00000000000038b402003fb4020049b4020052b4020057b402004c6f61646564004e'
+    '6f7420666f756e64004261642066696c650042757379004661696c656400000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000a0e31eff2fe1f0432de998d04de20d00a0e10fe0a0e106ffffea58819fe5'
+    '0090d8e5000059e10240a0234500002a78008de244119fe50fe0a0e1c8feffea0c10a0e3990101e001108de00fe0a0e1'
+    'c3feffea28119fe50fe0a0e1c0feffea20019fe5000090e50010a0e30fe0a0e114f19fe50050b0e10440a0033100000a'
+    '78008de204119fe50fe0a0e100f19fe50060b0e10240a0032600000a0fe0a0e1f0f09fe5f0709fe5070050e10340a013'
+    '1200001a0600a0e10510a0e10720a0e10fe0a0e1d4f09fe5070050e10340a0130a00001ac8009fe50010a0e3012090e7'
+    '013095e7030052e10340a0130300001a041081e2180051e3f7ffff3a0040a0e30600a0e10fe0a0e198f09fe5000054e3'
+    '0800001a0100a0e30110a0e30720a0e10530a0e10fe0a0e17cf09fe5000050e30140a0a30540a0b348009fe5000090e5'
+    '0fe0a0e164f09fe50240c8e5010054e30700001a0100a0e30100c8e5050088e20c10a0e3990101e001108de00fe0a0e1'
+    '7bfeffea98d08de2f083bde8fc3115000ab3020015b302002c420d00180f02001ab3020028640a006c4f0a00107c0000'
+    '846a0a00e8b2020098640a00c4060900640f020043616d6572612073746174730050726f66696c65730055503a207072'
+    '6f66696c6573202020205345543a20636c6f7365005345543a206c6f616420202020494e464f3a20636c6f7365004e6f'
+    '2070726f66696c657320696e205c50524f46494c45530000')
+PICKER_CODE_SHA = 'd66489e061768bfad789082000bfbebd8e43fd20a1bc55d263b9b270b4467393'
+PICKER_ENTRY = 0x2ABD8                     # info_open
+PICKER_STATE = (0x1531FC, 0x15320C)        # its 16 state bytes: the `ldimg` command's filename buffer
+
+
 def template():
     t, slots = m8_wrapdng.build_template(m8_wrapdng.BLACK)
     if hashlib.sha256(t).hexdigest() != TEMPLATE_SHA:
@@ -346,6 +417,15 @@ def profile_blob():
     return PROFILE_CODE + UDF * ((hi - lo - len(PROFILE_CODE)) // 4)
 
 
+def picker_blob():
+    if hashlib.sha256(PICKER_CODE).hexdigest() != PICKER_CODE_SHA:
+        raise SystemExit('PICKER_CODE does not match its SHA-256')
+    lo, hi = REGIONS['bfmem']
+    if len(PICKER_CODE) > hi - lo:
+        raise SystemExit(f'bfmem overflow: {len(PICKER_CODE)} > {hi - lo} bytes')
+    return PICKER_CODE + UDF * ((hi - lo - len(PICKER_CODE)) // 4)
+
+
 def memtest12_blob():
     if hashlib.sha256(STATS_CODE).hexdigest() != STATS_CODE_SHA:
         raise SystemExit('STATS_CODE does not match its SHA-256')
@@ -383,6 +463,8 @@ def pieces():
         'stats key': ('infokey', 0x44F68, bytes.fromhex('0700001a'), bne(0x44F68, STATS_ENTRY)),
         'profile': ('bfmem', REGIONS['bfmem'][0], BFMEM_STOCK_SHA, profile_blob()),
         'profile key': ('infokey', 0x44F68, bytes.fromhex('0700001a'), bne(0x44F68, PROFILE_ENTRY)),
+        'picker': ('bfmem', REGIONS['bfmem'][0], BFMEM_STOCK_SHA, picker_blob()),
+        'picker key': ('infokey', 0x44F68, bytes.fromhex('0700001a'), bne(0x44F68, PICKER_ENTRY)),
     }
 
 
@@ -402,6 +484,8 @@ STAGES = {
          ['tiff', 'ldimg', 'hook', 'profile', 'profile key']),
     12: ('as stage 11, plus the MODERN tone curve built in as the default (LUTS GAMMA curves)',
          ['tiff', 'ldimg', 'hook', 'profile', 'profile key', 'modern curve']),
+    13: ('as stage 8, plus a picture-profile picker: UP/DOWN lists \\PROFILES\\*.LUT, SET loads one',
+         ['tiff', 'ldimg', 'hook', 'picker', 'picker key']),
 }
 KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
     '3f84b34a225aeebe3f5f18cb658d4b14028d49d98e1fd1d1366ccf25a5830e66':
@@ -428,7 +512,10 @@ KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
     'f01920471c14c6d6f9f2a2bb90264d0c24e5e94cbd87601f040ea9450b764f31':
         'stage 11, Camera stats + UP loads \\PROFILE.LUT (test build); m8_infotest 62/0, m8_inforender 34/0, m8_savetest 49/0; flashed and camera-tested 2026-10-23 (the next JPG uses the loaded curve)',
     '5af5aa1c594db889f7757015e4b0e0758e21cea2c31a26f81f21a02d559c30f1':
-        'stage 12, stage 11 + MODERN tone curve built in; m8_curvetest 27/0 (PXA == stage 11), m8_savetest 49/0 (2026-10-27); not flashed',
+        'stage 12, stage 11 + MODERN tone curve built in; m8_curvetest 27/0 (PXA == stage 11), m8_savetest 49/0; '
+        'flashed and camera-tested 2026-10-27 (camera used MODERN); rolled back: stock curves stay the default',
+    'd7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14':
+        'stage 13, Camera stats + picture-profile picker; m8_infotest 74/0, m8_inforender 44/0, m8_savetest 49/0 (2026-10-27); not flashed',
 }
 
 

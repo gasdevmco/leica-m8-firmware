@@ -739,6 +739,33 @@ Idea under study: INFO screen lists profile files on the card, SET loads one for
   PXA identical to stage 11. Not flashed. `stock` profile (`LEICA.LUT`, exact copy) brings Leica's
   curves back with stage 11's UP loader.
 
+- **Stage 12 camera test (2026-10-27) [tested]:** `L1032012`–`L1032014` (sRGB, ISO 160/640/320) fit
+  the MODERN sRGB Standard curve at scale 1.01 / 0.99 / 1.01 (median 1–1.5 levels); Leica's curves
+  fit only with an impossible input scale 0.72–0.8. Owner's verdict: highlights better, overall
+  contrast down (MODERN: blacks 17 vs Leica 11 at −5 stops, mid-tone slope 42 vs 48 levels/stop,
+  mid-grey 125 vs 147; flatter per-channel curves also lower saturation). Contrast Medium High /
+  High under MODERN give 46 / 52.5 levels/stop. **Rolled back: stock curves stay the default.**
+
+### Stage 13: picture-profile picker (2026-10-27, `tools/asm/m8_infopicker.s`)
+
+- Region bfmem 0x2ABD0-0x2B6E8 as stages 7/11 (stubs at the four command entries); 2,808 bytes.
+- INFO → Camera stats (stage 8 + "Tone curve" row: the loaded profile's name or "Leica (stock)");
+  UP/DOWN → "Profiles": every file in `\PROFILES` that is not a directory / hidden / system, is
+  31,760 bytes and is named `<1-8 letters/digits>.LUT` (any case; shown upper case), at most 10, in
+  directory order, re-read at every paint and load. UP/DOWN move (wrap round), SET loads (as
+  stage 11, path `\PROFILES\NAME.LUT`; result in the title bar), INFO closes.
+- One method table; the page lives in the state. **State: 16 bytes at 0x1531FC** = the filename
+  buffer (object 0x1531F0: {ptr, len, cap 0x80, buf}) of the `ldimg` debug command, used only by
+  `ldimg` (0x28AB4; reclaimed in the DNG builds) and set up once by the debug-shell init 0x2CA60.
+  It lies in .bss (0xF1BB0-0x1837E0, cleared at 0x20118), so it is zero at every start-up:
+  +0 selection, +1 loaded, +2 last result, +3 entries, +4 page, +5 name (11 bytes).
+- No Leica entry in firmware: a `LEICA.LUT` (`m8_profile.py stock`, exact copy) in `\PROFILES`
+  restores the stock curves; so does power off / on.
+- Build `d7a17ef2…`: m8_infotest 74/0 (INFO opens as stage 8 plus the page byte), m8_inforender
+  44/0 (fake card with junk files; every key, every load outcome, directory and file always
+  closed, buffer always released, stores only stack / state / dialog+0 / framebuffer),
+  m8_savetest 49/0. Not flashed.
+
 ## Known 2.024 issue
 
 Some bodies stop saving images after 2.024 (LED blinks, nothing written). Fixed for some

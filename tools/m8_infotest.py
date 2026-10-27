@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Emulator test of the INFO builds (m8_dngpatch.py --stage 6, 7, 8, 11; 10 = Option 1 + INFO) against stage 4.
+Emulator test of the INFO builds (m8_dngpatch.py --stage 6, 7, 8, 11, 13; 10 = Option 1 + INFO) against stage 4.
 
 Runs the camera's real application key handler 0x44E30 (and the service gate 0x403F0) on both
 builds, for every key code in every GUI state below, and records each call out of the handler
@@ -146,6 +146,8 @@ def main():
               m8_asm.assemble(os.path.join(ROOT, 'tools/asm/m8_info.s')) == d.INFO_CODE, True)
     res.check('m8_infoscreens.s reassembles to SCREENS_CODE',
               m8_asm.assemble(os.path.join(ROOT, 'tools/asm/m8_infoscreens.s')) == d.SCREENS_CODE, True)
+    res.check('m8_infopicker.s reassembles to PICKER_CODE',
+              m8_asm.assemble(os.path.join(ROOT, 'tools/asm/m8_infopicker.s')) == d.PICKER_CODE, True)
     res.check('m8_infoprofile.s reassembles to PROFILE_CODE',
               m8_asm.assemble(os.path.join(ROOT, 'tools/asm/m8_infoprofile.s')) == d.PROFILE_CODE, True)
     res.check('m8_infostats.s reassembles to STATS_CODE',
@@ -169,6 +171,10 @@ def main():
         11: ('bfmem', ['word 0x2DAB0 = 0x2B4B0', 'word 0x2DAC0 = 0x2ABD0', 'word 0x2DACC = 0x2B0E0',
                        'word 0x2DAD8 = 0x2B338', 'branch 0x44F68'],
              open_menu + [('write', 'app+0x70A4', 4, vt_address(11, 'vt_idle'))] + show_dialog),
+        13: ('bfmem', ['word 0x2DAB0 = 0x2B4B0', 'word 0x2DAC0 = 0x2ABD0', 'word 0x2DACC = 0x2B0E0',
+                       'word 0x2DAD8 = 0x2B338', 'branch 0x44F68'],
+             open_menu + [('write', '0x153200', 1, 0),          # picker state: page = Camera stats
+                          ('write', 'app+0x70A4', 4, vt_address(13, 'vt_info'))] + show_dialog),
         # Option 1 + INFO: same pieces as stage 8 on the RAW-patch build (region check vs that build)
         10: ('memtest12', ['word 0x2DAC0 = 0x2ABD0', 'word 0x2DACC = 0x2B0E0', 'branch 0x44F68'],
              open_menu + [('write', 'app+0x70A4', 4, vt_address(8, 'vt_stats'))] + show_dialog),
