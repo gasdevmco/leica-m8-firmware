@@ -158,18 +158,26 @@ The script:
 
 ## Safety and recovery
 
-**What the patches don't touch.** Both builds leave the bootloader (RedBoot, not in the update file at
-all), the SD-card updater, startup code, settings load/save, and every other part of the update file
-(DSP, FPGA, body controller, fonts, lens table) byte-identical. The patch scripts check this
-automatically on every build. The new DNG code runs only while a JPG fine+RAW shot is being saved,
-never at startup or during an update. It writes only into the unused last sensor row of the image
-buffer, and it range-checks every write. The `--info` code runs only when INFO is pressed in shooting
-mode; it opens the screen the way the camera's own service menu does, draws with the camera's own
-drawing routines, and changes no settings.
+**What the patches change, and what they don't.** The RAW patch (both options) changes three
+instructions: one in the settings loader, which runs at every start-up (it keeps JPG fine+RAW
+instead of resetting it), and two in the SET-menu loader (they list it in Compression). Option 2
+adds the DNG code, and `--info` adds the INFO screen; each is reached through one changed branch.
+Everything else stays byte-identical: the bootloader (RedBoot, not in the update file at all), the
+SD-card updater, the rest of the startup code and of settings load/save, and every other part of
+the update file (DSP, FPGA, body controller, fonts, lens table). The patch scripts check this
+automatically on every build (details: [docs/FINDINGS.md](docs/FINDINGS.md)). The new DNG code runs
+only while a JPG fine+RAW shot is being saved, never at startup or during an update. It writes only
+into the unused last sensor row of the image buffer, and it range-checks every write. The `--info`
+code runs only when INFO is pressed in shooting mode; it opens the screen the way the camera's own
+service menu does, draws with the camera's own drawing routines, and changes no settings.
 
 **Rolling back.** The updater accepts the same or an older version, so flashing the stock
-`m8-2_014.upd` from the card always returns the camera to stock. The author has done
-patched → stock → patched on hardware. Before sending the camera to Leica for service, reflash stock.
+`m8-2_014.upd` from the card returns the camera to stock. This relies on the patched firmware
+starting up: the SD-card updater is part of the same program, so a build that failed to start
+would also block recovery from the card (it would then need Leica service). That is why every
+build is emulator-tested before it is published and the start-up changes are kept to the one
+instruction above. The author has done patched → stock → patched on hardware. Before sending the
+camera to Leica for service, reflash stock.
 
 **If something looks wrong while shooting** (freeze, error, odd behaviour):
 
