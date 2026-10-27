@@ -115,9 +115,11 @@ stock code. Switching to one of them turns the new code off completely.
   `99f5254847a92c68086f37b1a4140c359379801b479df12052136abb73f09ed0`. The same file is used to
   return to stock.
   - **Where to get it:** Leica's own download links for 2.014 are gone. The author's copy came from
-    the French driver archive [touslesdrivers.com](https://www.touslesdrivers.com/); Softpedia also
-    lists it. Any copy works as long as its SHA-256 matches the one above: `m8patch.py` checks this
-    and refuses anything else, so a damaged or altered file can't get through.
+    the French driver archive TousLesDrivers:
+    [Leica M8/M8.2 firmware 2.014](https://www.touslesdrivers.com/index.php?v_page=23&v_code=38007&v_langue=en)
+    (`m8-2_014.zip`, 2.1 MB; unzip it to get `m8-2_014.upd`). Softpedia also lists it. Any copy
+    works as long as its SHA-256 matches the one above: `m8patch.py` checks this and refuses
+    anything else, so a damaged or altered file can't get through.
   - **Coming from 2.024:** owners report downgrading 2.024 → 2.014 with this file (the updater
     accepts older versions; see [FINDINGS](docs/FINDINGS.md#updater-behaviour-pxa)). The author's
     camera was already on 2.014, so the downgrade itself hasn't been tested here.
