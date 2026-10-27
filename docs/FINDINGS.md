@@ -707,6 +707,38 @@ Idea under study: INFO screen lists profile files on the card, SET loads one for
   200 → 126 (134), 240 → 218 (222). So the curve acts as `profile(stock curve)`, exactly the
   model `tools/m8_profile.py` uses; JPG previews from that tool are close to the camera result.
 
+### Rows, base tones, built-in default (2026-10-24 .. 27)
+
+- **Rows identified (static, from Leica's own tables):** re-encoding row 1 as gamma 2.2 → sRGB gives
+  row 2 within 0.3 levels (median, max 1.1), and row 2 as sRGB → gamma 1.8 gives row 3 within 0.3:
+  **row 1 = Adobe RGB (gamma 2.2), row 2 = sRGB, row 3 = ECI RGB (gamma 1.8)**, each 5 Contrast
+  steps Low..High. Leica made one tone per Contrast step and encoded it three ways. (Earlier notes
+  quoting "Leica standard, curve 2" used the Adobe row; the sRGB Standard curve is curve 7.)
+- **Input = linear sensor data, 0..2047 = black..white** (fit of `L1031982` RAW vs JPG: curve 12,
+  scale 0.993, median error 1 level), and the camera clips after white balance (fully clipped →
+  white, partly clipped keeps its colour).
+- **Simulator** (`tools/m8_curvesim.py`): raw → clip after WB → 3x3 matrix fitted from the JPG
+  (inverse of the camera's curve, mid-tones) → curve. Reproduces the camera JPGs `L1031976`,
+  `L1031982` within 1.5–2 levels median (ECI RGB, Contrast Standard detected).
+- **Comparisons** (sRGB Standard, stops from mid-grey −5/−3/−2/−1/0/+1/+2/clip): Leica 11/36/65/102/
+  147/198/243/255; plain sRGB 18/41/60/85/118/162/221/255; MODERN 17/41/61/88/125/172/228/255
+  (sRGB + Reinhard shoulder + gentle S). Leica's mid-grey is ~0.7 stop brighter than sRGB and
+  +1..+2.4 stops share 198–255: highlights look washed; MODERN kept hair / shirt detail in
+  `L1031976`. Sensor-clipped areas stay white with every curve.
+- **Nikon profiles belong on an sRGB base** (Nikon applies them to a normal-looking image); on
+  Leica's curve they brighten twice (Kodachrome mid-grey 158 vs 137 on sRGB).
+- **NCP settings (4 files compared, inferred):** 0x28 sharpening, 0x2B/0x2C saturation/hue (colour
+  bases; 0xFF on monochrome), 0x2D/0x2E filter/toning (monochrome; 0xFF on colour), values offset
+  0x80. PORTRA is built on a monochrome base (same ID bytes 0x24/0x25 as Tri-X).
+- **Baking a default:** the updater (0x2292C) writes every component on every update; LUTS via
+  0x21F08 = delete flash file "luts" (0xAFA34) + write the LUTS lump as is (0xAFBB0). The boot
+  loader reads entries by name and size (0x8D510 → 0x8D020), no checksum seen on either side.
+  **Stage 12** = stage 11 + MODERN in GAMMA's 15 curves (file span GAMMA+0x410..end; header,
+  colour data, size, LUTS directory unchanged; curves generated from the stock table at build time
+  and checked against `MODERN_CURVES_SHA`). `5af5aa1c…`: m8_curvetest 27/0, m8_savetest 49/0;
+  PXA identical to stage 11. Not flashed. `stock` profile (`LEICA.LUT`, exact copy) brings Leica's
+  curves back with stage 11's UP loader.
+
 ## Known 2.024 issue
 
 Some bodies stop saving images after 2.024 (LED blinks, nothing written). Fixed for some

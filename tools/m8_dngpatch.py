@@ -18,6 +18,7 @@ stage. Stages are not cumulative: each is a complete build, one flash per stage.
   8      stage 4 + stats, stats key      INFO shows Camera stats               camera-tested 2026-10-23
   10     stats, stats key (no DNG)       Option 1 + INFO Camera stats          camera-tested 2026-10-23
   11     stage 4 + profile, profile key  UP on Camera stats loads \\PROFILE.LUT   camera-tested 2026-10-23
+  12     stage 11 + modern curve         MODERN tone curve as the default        emulator-tested
 
 Pieces (each in one declared region, REGIONS):
   canary  0x3CEA0 mov r0,#7 -> #0xA5: RAW header u16[3] = 0xA5
@@ -39,6 +40,8 @@ Pieces (each in one declared region, REGIONS):
   profile 0x2ABD0-0x2B6E8 (as screens) -> stubs at the four entries + Camera stats with a tone-curve
           row; UP loads \\PROFILE.LUT into the Blackfin's GAMMA (tools/asm/m8_infoprofile.s), rest undefined fill
   profile key  as info key, to its info_open (also 0x2ABD8)
+  modern curve  LUTS lump (not PXA): the 15 GAMMA tone curves -> MODERN (tools/m8_profile.py), generated
+          from the stock table, checked against MODERN_CURVES_SHA; header and colour data unchanged
 
 Assembled bytes are frozen here with their SHA-256; m8_savetest.py reassembles the sources and
 fails if they no longer match.
@@ -397,6 +400,8 @@ STAGES = {
     10: ('Option 1 (RAW patch only, no DNG) plus INFO shows Camera stats', ['stats', 'stats key']),
     11: ('as stage 8, plus UP on Camera stats loads \\PROFILE.LUT as the JPG tone curve (test)',
          ['tiff', 'ldimg', 'hook', 'profile', 'profile key']),
+    12: ('as stage 11, plus the MODERN tone curve built in as the default (LUTS GAMMA curves)',
+         ['tiff', 'ldimg', 'hook', 'profile', 'profile key', 'modern curve']),
 }
 KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
     '3f84b34a225aeebe3f5f18cb658d4b14028d49d98e1fd1d1366ccf25a5830e66':
@@ -422,12 +427,45 @@ KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
         'stage 10, Option 1 + INFO Camera stats; m8_infotest 50/0, m8_inforender 7/0, m8_savetest 39/0; flashed and camera-tested 2026-10-23',
     'f01920471c14c6d6f9f2a2bb90264d0c24e5e94cbd87601f040ea9450b764f31':
         'stage 11, Camera stats + UP loads \\PROFILE.LUT (test build); m8_infotest 62/0, m8_inforender 34/0, m8_savetest 49/0; flashed and camera-tested 2026-10-23 (the next JPG uses the loaded curve)',
+    '5af5aa1c594db889f7757015e4b0e0758e21cea2c31a26f81f21a02d559c30f1':
+        'stage 12, stage 11 + MODERN tone curve built in; m8_curvetest 27/0 (PXA == stage 11), m8_savetest 49/0 (2026-10-27); not flashed',
 }
+
+
+# File-level pieces, outside the PXA lump: the 15 tone curves of the LUTS lump's GAMMA entry
+# (FINDINGS "JPG tone curves"). The updater copies the LUTS lump to flash as is on every update;
+# the boot task reads GAMMA from it by name and sends it to the Blackfin. Header, colour data
+# and size stay unchanged.
+GAMMA_CURVES_STOCK_SHA = '8c15f5d676e3563b48bb083ddefc44c4318316905767d8679d995c987d0db2ad'
+MODERN_CURVES_SHA = '852f752da7a0c462ba8008be20890aa94b99a2e9d530c4cf10e8057ef93d1e2c'
+
+
+def gamma_curves_span(buf):
+    """(start, end) file offsets of the 15 curves (GAMMA + 0x410 .. end of GAMMA)."""
+    pos, size = find_lump(buf, b'LUTS')
+    gpos, gsize = find_lump(bytes(buf[pos:pos + size]), b'GAMMA')
+    if gsize != 31760:
+        raise SystemExit('unexpected GAMMA size')
+    return pos + gpos + 0x410, pos + gpos + gsize
+
+
+def modern_curves(buf):
+    """MODERN tone (tools/m8_profile.py) in all 15 slots, generated from this file's GAMMA."""
+    import m8_profile
+    lo, hi = gamma_curves_span(buf)
+    new = m8_profile.build(bytes(buf[lo - 0x410:hi]), m8_profile.tone_modern())[0x410:]
+    if hashlib.sha256(new).hexdigest() != MODERN_CURVES_SHA:
+        raise SystemExit('MODERN curves generated on this computer differ from the tested bytes; nothing written')
+    return new
+
+
+FILE_PIECES = {'modern curve': (GAMMA_CURVES_STOCK_SHA, modern_curves)}
 
 
 def stage_regions(stage):
     p = pieces()
-    return {p[name][0] for name in STAGES[stage][1]}
+    names = STAGES[stage][1]
+    return {p[n][0] for n in names if n in p} | {'gamma' for n in names if n in FILE_PIECES}
 
 
 def _apply(buf, pos, changes):
@@ -457,7 +495,7 @@ def stage_file(stock, stage):
     if stage not in STAGES:
         raise SystemExit(f'no stage {stage}')
     p = pieces()
-    names = STAGES[stage][1]
+    names = [n for n in STAGES[stage][1] if n not in FILE_PIECES]
     regions = [p[n][0] for n in names]
     if len(set(regions)) != len(regions):
         raise SystemExit(f'stage {stage}: two pieces in one region')
@@ -465,7 +503,16 @@ def stage_file(stock, stage):
     buf = bytearray(base)
     pos, size = find_lump(buf, b'PXA')
     _apply(buf, pos, [(n, *p[n][1:]) for n in names])
-    bad = region_violations(base, bytes(buf), pos, size, set(regions))
+    spans = []
+    for n in STAGES[stage][1]:
+        if n in FILE_PIECES:
+            old_sha, make = FILE_PIECES[n]
+            lo, hi = gamma_curves_span(buf)
+            if hashlib.sha256(bytes(buf[lo:hi])).hexdigest() != old_sha:
+                raise SystemExit(f'{n}: unexpected original bytes')
+            buf[lo:hi] = make(buf)
+            spans.append((lo, hi))
+    bad = region_violations(base, bytes(buf), pos, size, set(regions), spans)
     if bad:
         raise SystemExit('changes outside the declared regions: ' + ', '.join(bad))
     return base, bytes(buf)
@@ -487,11 +534,15 @@ def changed_ranges(a, b):
     return out
 
 
-def region_violations(base, new, pos, size, regions):
-    """File-level diff vs the flashed build; every changed byte must lie in a declared region."""
-    allowed = [REGIONS[r] for r in regions]
+def region_violations(base, new, pos, size, regions, file_spans=()):
+    """File-level diff vs the flashed build; every changed byte must lie in a declared region
+    (PXA regions by address, file_spans by file offset)."""
+    file_spans = list(file_spans) + ([gamma_curves_span(new)] if 'gamma' in regions else [])
+    allowed = [REGIONS[r] for r in regions if r != 'gamma']
     bad = []
     for s, e in changed_ranges(base, new):
+        if any(lo <= s and e <= hi for lo, hi in file_spans):
+            continue
         if not (pos <= s and e <= pos + size):
             bad.append(f'file 0x{s:X}-0x{e:X} (outside PXA lump)')
             continue
@@ -553,7 +604,8 @@ def main():
     show(base, new)
     n = sum(e - s for s, e in changed_ranges(base, new))
     print(f'differs from the flashed build in {n} byte(s), all inside declared regions '
-          f'{sorted(stage_regions(stage))}; other lumps identical')
+          f'{sorted(stage_regions(stage))}; other lumps identical'
+          + (' (LUTS: only the 15 GAMMA tone curves changed)' if 'gamma' in stage_regions(stage) else ''))
     open(dst, 'wb').write(new)
     sha = hashlib.sha256(new).hexdigest()
     print('wrote', dst, 'sha256', sha)
