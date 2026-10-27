@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Emulator test of the INFO builds (m8_dngpatch.py --stage 6, 7, 8, 11, 13; 10 = Option 1 + INFO) against stage 4.
+Emulator test of the INFO builds (m8_dngpatch.py --stage 6, 7, 8, 11, 13; 10 / 14 = Option 1 + INFO / picker) against stage 4.
 
 Runs the camera's real application key handler 0x44E30 (and the service gate 0x403F0) on both
 builds, for every key code in every GUI state below, and records each call out of the handler
@@ -175,6 +175,11 @@ def main():
                        'word 0x2DAD8 = 0x2B338', 'branch 0x44F68'],
              open_menu + [('write', '0x153200', 1, 0),          # picker state: page = Camera stats
                           ('write', 'app+0x70A4', 4, vt_address(13, 'vt_info'))] + show_dialog),
+        # Option 1 + picker: same pieces as stage 13 (region check vs the RAW-patch build)
+        14: ('bfmem', ['word 0x2DAB0 = 0x2B4B0', 'word 0x2DAC0 = 0x2ABD0', 'word 0x2DACC = 0x2B0E0',
+                       'word 0x2DAD8 = 0x2B338', 'branch 0x44F68'],
+             open_menu + [('write', '0x153200', 1, 0),
+                          ('write', 'app+0x70A4', 4, vt_address(13, 'vt_info'))] + show_dialog),
         # Option 1 + INFO: same pieces as stage 8 on the RAW-patch build (region check vs that build)
         10: ('memtest12', ['word 0x2DAC0 = 0x2ABD0', 'word 0x2DACC = 0x2B0E0', 'branch 0x44F68'],
              open_menu + [('write', 'app+0x70A4', 4, vt_address(8, 'vt_stats'))] + show_dialog),
@@ -186,12 +191,19 @@ def main():
               (d.pxa_of(s10)[lo - PXA_BASE:hi - PXA_BASE] == d.pxa_of(s8)[lo - PXA_BASE:hi - PXA_BASE],
                d.pxa_of(s10)[0x44F68 - PXA_BASE:0x44F6C - PXA_BASE] == d.pxa_of(s8)[0x44F68 - PXA_BASE:0x44F6C - PXA_BASE]),
               (True, True))
+    _, s13 = d.stage_file(stock, 13)
+    _, s14 = d.stage_file(stock, 14)
+    lo, hi = d.REGIONS['bfmem']
+    res.check('stage 14 picker bytes == stage 13 picker bytes (code region + branch)',
+              (d.pxa_of(s14)[lo - PXA_BASE:hi - PXA_BASE] == d.pxa_of(s13)[lo - PXA_BASE:hi - PXA_BASE],
+               d.pxa_of(s14)[0x44F68 - PXA_BASE:0x44F6C - PXA_BASE] == d.pxa_of(s13)[0x44F68 - PXA_BASE:0x44F6C - PXA_BASE]),
+              (True, True))
     unknown = set()
     for n, (region, want_refs, extra) in stages.items():
         base, sn = d.stage_file(stock, n)
         pn = d.pxa_of(sn)
         pos, size = d.find_lump(sn, b'PXA')
-        ref, ref_name = (base, 'Option 1 (RAW patch)') if n == 10 else (s4, 'stage 4')
+        ref, ref_name = (base, 'Option 1 (RAW patch)') if n in (10, 14) else (s4, 'stage 4')
         res.check(f'stage {n} vs {ref_name}: changes only in {region} + infokey',
                   d.region_violations(ref, sn, pos, size, {region, 'infokey'}), [])
         res.check(f'stage {n}: references into the new code', refs_into(pn, *d.REGIONS[region]), want_refs)

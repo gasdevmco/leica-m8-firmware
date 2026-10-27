@@ -21,6 +21,7 @@ stage. Stages are not cumulative: each is a complete build, one flash per stage.
   12     stage 11 + modern curve         MODERN tone curve as the default        flashed 2026-10-27; rolled back
                                          (owner's decision: stock curves stay the default)
   13     stage 4 + picker, picker key    INFO: Camera stats + profile picker     camera-tested 2026-10-27
+  14     picker, picker key (no DNG)     Option 1 + Camera stats + profile picker emulator-tested
 
 Pieces (each in one declared region, REGIONS):
   canary  0x3CEA0 mov r0,#7 -> #0xA5: RAW header u16[3] = 0xA5
@@ -486,6 +487,7 @@ STAGES = {
          ['tiff', 'ldimg', 'hook', 'profile', 'profile key', 'modern curve']),
     13: ('as stage 8, plus a picture-profile picker: UP/DOWN lists \\PROFILES\\*.LUT, SET loads one',
          ['tiff', 'ldimg', 'hook', 'picker', 'picker key']),
+    14: ('Option 1 (RAW patch only, no DNG) plus Camera stats + picture-profile picker', ['picker', 'picker key']),
 }
 KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
     '3f84b34a225aeebe3f5f18cb658d4b14028d49d98e1fd1d1366ccf25a5830e66':
@@ -517,6 +519,8 @@ KNOWN_OUTPUTS = {  # stage builds whose emulator run passed (see FINDINGS)
     'd7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14':
         'stage 13, Camera stats + picture-profile picker; m8_infotest 74/0, m8_inforender 44/0, m8_savetest 49/0; '
         'flashed and camera-tested 2026-10-27 (every profile loaded and used for the next shot)',
+    'e170f4493f8562cf7ce67bdb286b27bdc9a089898f12b48b1916af99a4fb8f9d':
+        'stage 14, Option 1 + Camera stats + picker (picker bytes == stage 13); m8_infotest 86/0, m8_inforender 44/0, m8_savetest 39/0 (2026-10-27); not flashed',
 }
 
 

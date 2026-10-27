@@ -10,10 +10,14 @@ Tools for patching the firmware of the **Leica M8** so it can:
    camera's own DNG mode is 8-bit (companded); this keeps the full sensor data and needs no
    conversion step.
 
-Optional add-on for either option: **INFO shows Camera stats.** In shooting mode the INFO button
-shows the shutter count, battery, temperature and lens code (experimental).
+Optional add-ons for either option (experimental):
 
-> **Status: tested on one camera.** Both patches and the `--info` add-on run on the author's M8 with firmware 2.014. They are
+- **INFO shows Camera stats** (`--info`): shutter count, battery, temperature and lens code.
+- **Picture profiles** (`--profiles`): Camera stats plus a profile picker. Load your own JPG tone
+  curves (for example Nikon Picture Control files from nikonpc.com) from the SD card; the camera's
+  own curves stay the default.
+
+> **Status: tested on one camera.** Both patches and the add-ons run on the author's M8 with firmware 2.014. They are
 > experimental, not affiliated with or endorsed by Leica, and flashing modified firmware is at your
 > own risk. Read [Safety and recovery](#safety-and-recovery) before flashing anything.
 
@@ -25,6 +29,7 @@ and refuses anything else.
 
 - [Why 14-bit?](#why-14-bit)
 - [Choose an option](#choose-an-option)
+- [Picture profiles](#picture-profiles-experimental)
 - [Requirements](#requirements)
 - [Build your firmware file](#build-your-firmware-file)
 - [Flash it](#flash-it)
@@ -96,6 +101,11 @@ way that page does (a read-only request). Service mode is unchanged: after the s
 sequence, INFO still opens the service menu. The screen is in English only. Tested on the author's
 camera with both options.
 
+### Add-on: Picture profiles (`--profiles`, experimental)
+
+Includes Camera stats, plus a picker for JPG tone curves stored on the card. See
+[Picture profiles](#picture-profiles-experimental) below.
+
 With Option 2, each JPG fine+RAW shot produces:
 
 - `L10xxxxx.JPG`: the camera's normal JPG, used by in-camera review.
@@ -107,6 +117,53 @@ With Option 2, each JPG fine+RAW shot produces:
 
 With either option, the other Compression modes (JPG fine, JPG basic, DNG, DNG+JPG) are unchanged
 stock code. Switching to one of them turns the new code off completely.
+
+## Picture profiles (experimental)
+
+The M8 makes its JPGs with a tone curve (how bright each level of light becomes). With
+`--profiles`, you can load other curves from the SD card: film-style looks from Nikon Picture
+Control files, or the built-in `MODERN` curve (more highlight detail). Nothing changes until you
+load a profile: the camera's own curves stay the default, and a profile lasts until power-off.
+
+<p align="center"><img src="docs/assets/info-profiles.png" width="640"
+alt="Camera stats with the loaded profile, and the Profiles list with PORTRA loaded"></p>
+<p align="center"><sub>Rendered in the emulator with the camera's own drawing routines and fonts
+(<code>tools/m8_inforender.py</code>), 2× size.</sub></p>
+
+**1. Make the profile files** on your computer, from your stock firmware file and your profiles:
+
+```sh
+python3 m8patch.py profiles ~/Downloads/m8-2_014.upd portra.ncp kodachrm.ncp modern
+```
+
+This writes `build/PROFILES/` with `PORTRA.LUT`, `KODACHRM.LUT`, `MODERN.LUT` and always
+`LEICA.LUT` (the camera's own curves, to switch back). Each name comes from the file name, so name
+your files with 1–8 letters or digits. A folder of `.ncp` files works too. Accepted:
+
+- **Nikon Picture Control files (`.ncp`)**, for example from nikonpc.com. Only the tone curve is
+  used; Nikon's other settings (saturation, sharpening, hue) have no M8 equivalent, and the script
+  prints them so you can set something similar on the camera. Profiles are applied the way Nikon
+  applies them, on a neutral sRGB tone (`--base modern` or `--base leica` for other bases).
+- **Curve points** in a text file, one `input,output` pair per line (0–255).
+- **Built-in curves:** `modern` (sRGB-like, soft highlight shoulder) and `moderndr` (the same for
+  shooting at −1 EV: about a stop more highlight room).
+
+**2. Copy the `PROFILES` folder** to the root of the camera's SD card.
+
+**3. In shooting mode:** INFO shows Camera stats with the loaded curve ("Tone curve"). UP opens the
+**Profiles** list; UP/DOWN chooses, SET loads ("Loaded" appears), INFO closes. The next shots use
+it, in every colour space and with the Contrast setting still working. Choose `LEICA`, or switch
+the camera off and on, for the camera's own curves.
+
+Good to know:
+
+- Profiles change the **JPG only**; RAW and DNG files are unaffected.
+- The camera lists the first 10 profiles in the folder (including `LEICA`).
+- `.LUT` files contain Leica data taken from your stock file, so keep them for yourself, like the
+  firmware. Nikon profiles belong to their authors: download your own copies.
+- Under the hood: the picker sends the file to the camera's image processor with the same routine
+  the camera uses at start-up for its own curves. Nothing is written to flash or settings.
+  Details: [FINDINGS "JPG tone curves"](docs/FINDINGS.md#jpg-tone-curves-and-picture-profiles-from-the-card-static-2026-10-23-research-only).
 
 ## Requirements
 
@@ -134,15 +191,15 @@ python3 m8patch.py raw-menu  ~/Downloads/m8-2_014.upd     # Option 1
 python3 m8patch.py dng       ~/Downloads/m8-2_014.upd     # Option 2
 ```
 
-Add `--info` to either command for the Camera stats add-on, for example
-`python3 m8patch.py dng ~/Downloads/m8-2_014.upd --info`.
+Add `--info` to either command for the Camera stats add-on, or `--profiles` for Camera stats plus
+the picture-profile picker, for example `python3 m8patch.py dng ~/Downloads/m8-2_014.upd --profiles`.
 
 The script:
 
 - only reads your stock file and never changes it;
 - refuses anything that isn't Leica's unmodified 2.014 file;
-- writes the result to `build/m8-2_014-raw-menu.upd` or `build/m8-2_014-dng.upd` (with `--info`:
-  `…-raw-menu-info.upd`, `…-dng-info.upd`). It never overwrites an existing file; `--out-dir DIR`
+- writes the result to `build/m8-2_014-raw-menu.upd` or `build/m8-2_014-dng.upd` (with an add-on:
+  `…-dng-info.upd`, `…-dng-profiles.upd`, and so on). It never overwrites an existing file; `--out-dir DIR`
   writes somewhere else;
 - writes it only if it is byte-identical to the build tested by the author, and prints its SHA-256
   and the next steps.
@@ -153,6 +210,10 @@ The script:
 | Option 2, 2.014 | `55264b11f86dd66e61f1412c5c341afdaa8553ce0d10ade270e52de1f24c944c` |
 | Option 1 + `--info`, 2.014 | `fa4ae63a22e2df9749e989ccc570808ac24dabe1a3992593c4c37d27ad6c1c43` |
 | Option 2 + `--info`, 2.014 | `32e6854ec0bc451667ef4f8f6b40dfb4c8af406a43db84e94b90abeb380408f8` |
+| Option 2 + `--profiles`, 2.014 | `d7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14` |
+
+Option 1 + `--profiles` is built and emulator-tested but not yet camera-tested, so the script
+refuses it for now.
 
 ## Flash it
 
@@ -164,6 +225,7 @@ The script:
    usually pauses around 60% before completing. **Don't touch the battery or card while it runs.**
 5. After the restart: SET → Compression → **JPG fine+RAW**. Take a test shot and check it on the
    computer. With `--info`, press INFO in shooting mode: Camera stats appears, INFO or SET closes it.
+   With `--profiles`, see [Picture profiles](#picture-profiles-experimental).
 
 ## Safety and recovery
 
@@ -178,7 +240,10 @@ automatically on every build (details: [docs/FINDINGS.md](docs/FINDINGS.md)). Th
 only while a JPG fine+RAW shot is being saved, never at startup or during an update. It writes only
 into the unused last sensor row of the image buffer, and it range-checks every write. The `--info`
 code runs only when INFO is pressed in shooting mode; it opens the screen the way the camera's own
-service menu does, draws with the camera's own drawing routines, and changes no settings.
+service menu does, draws with the camera's own drawing routines, and changes no settings. The
+`--profiles` picker additionally reads the card's `PROFILES` folder and, when you press SET, sends
+the chosen curve to the image processor until power-off; it writes nothing to the card, flash or
+settings.
 
 **Rolling back.** The updater accepts the same or an older version, so flashing the stock
 `m8-2_014.upd` from the card returns the camera to stock. This relies on the patched firmware

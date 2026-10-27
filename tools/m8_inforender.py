@@ -29,7 +29,7 @@ SET in every load outcome with the right path, the directory and file always clo
 always released, and that our code stores only to the stack, its 16 state bytes, dialog+0 and
 (painting) the framebuffer.
 
-Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10|11|13] [--out DIR] [-v]
+Usage:  work/venv/bin/python tools/m8_inforender.py [image.JPG] [--stage 7|8|10|11|13|14] [--out DIR] [-v]
 Needs:  unicorn, Pillow (work/venv)
 """
 import os, struct, sys
@@ -49,7 +49,8 @@ STAGES = {7: ('tools/asm/m8_infoscreens.s', 'bfmem', 'SCREENS_CODE'),
           8: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),
           10: ('tools/asm/m8_infostats.s', 'memtest12', 'STATS_CODE'),   # Option 1 + INFO
           11: ('tools/asm/m8_infoprofile.s', 'bfmem', 'PROFILE_CODE'),    # + tone-curve load (test)
-          13: ('tools/asm/m8_infopicker.s', 'bfmem', 'PICKER_CODE')}      # + profile picker
+          13: ('tools/asm/m8_infopicker.s', 'bfmem', 'PICKER_CODE'),      # + profile picker
+          14: ('tools/asm/m8_infopicker.s', 'bfmem', 'PICKER_CODE')}      # Option 1 + picker
 STAGE = 8
 SRC = os.path.join(ROOT, STAGES[STAGE][0])
 LO, HI = d.REGIONS[STAGES[STAGE][1]]       # region of the new code

@@ -3,6 +3,22 @@
 Versions of this project (not Leica firmware versions). Every build is for Leica M8 firmware **2.014**.
 Hashes are the SHA-256 of the file `m8patch.py` writes; if yours differs, don't flash it.
 
+## Unreleased (v0.5.0)
+
+- **New add-on, `--profiles` (experimental), for either option:** Camera stats plus a
+  picture-profile picker. INFO → UP lists the `.LUT` files in the card's `PROFILES` folder; SET
+  loads one as the JPG tone curve until power-off. The camera's own curves stay the default.
+  Option 2 + `--profiles` is camera-tested (`d7a17ef2…`); Option 1 + `--profiles` is built and
+  emulator-tested, refused until camera-tested.
+- **New command, `m8patch.py profiles`:** turns Nikon Picture Control files (`.ncp`), curve-point
+  files or the built-in `modern` / `moderndr` curves into a card-ready `PROFILES` folder (always
+  with `LEICA.LUT`). Profiles keep the Contrast setting working and look the same in every colour
+  space.
+- Developers: `tools/m8_profile.py` (curve engine), `tools/ncp.py`, `tools/m8_curvesim.py` (renders
+  curves from your RAW files), `tools/m8_curvetest.py`; picker tests in `m8_infotest.py` /
+  `m8_inforender.py`.
+- Tried and rolled back: a build with the `MODERN` curve built in as the default (stage 12).
+
 ## v0.4.0 — 2026-10-23
 
 - **New add-on, `--info` (experimental), for either option:** in shooting mode the INFO button (which
