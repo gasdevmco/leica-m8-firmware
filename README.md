@@ -179,7 +179,10 @@ Good to know:
     anything else, so a damaged or altered file can't get through.
   - **Coming from 2.024:** owners report downgrading 2.024 → 2.014 with this file (the updater
     accepts older versions; see [FINDINGS](docs/FINDINGS.md#updater-behaviour-pxa)). The author's
-    camera was already on 2.014, so the downgrade itself hasn't been tested here.
+    camera was already on 2.014, so the downgrade itself hasn't been tested here. What you give up:
+    2.024 adds lens names for newer lenses and a newer build of the image-processor program; the
+    JPG tone curves and everything these patches use are the same
+    ([details](docs/FINDINGS.md#what-2024-changed-static-2026-10-27)).
 - Python 3 (any recent version; the one built into macOS works). Nothing else to install.
 
 ## Build your firmware file

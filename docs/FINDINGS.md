@@ -785,6 +785,24 @@ Some bodies stop saving images after 2.024 (LED blinks, nothing written). Fixed 
 owners by downgrading to 2.014. 2.024 replaced the Blackfin code (build Jan 2008 → May 2010),
 the most likely suspect (unconfirmed). Plan: stay on 2.014.
 
+### What 2.024 changed (static, 2026-10-27)
+
+- **PXA:** besides build dates, version strings and new lens names, the only code change is
+  0xAE8B0: the serial console's line-input routine (backspace 8/0x7F, CR/LF, echo, Ctrl-W 0x17;
+  2.024 fixes the raw-mode flag handling and an off-by-one in the Ctrl-W check). Not user-visible.
+- **LUTS:** only OBJ (lens table, 2 bytes) and VERSION differ; GAMMA etc. identical.
+- **BF lump** = the Blackfin BF561 image: a boot stream for core A (4-byte global header
+  0xA00000DE, then blocks {u32 address, u32 count, u16 flags, data}; flags 0x0001 zero-fill,
+  0x0010 ignore, 0x8000 last) followed by one for core B (no global header). Core A: L1 code
+  0xFFA00000/0xFFA10000, data 0xFF800000, L2 from 0xFEB0E500; core B: L1 code 0xFF600000/0xFF610000,
+  data 0xFF400000, L2 from 0xFEB17400. Strings: `V0.13.04` (both), `V2.60R(380)` Jan 16 2008 →
+  `V2.60R(383)` May 6 2010.
+- **BF differences:** both cores rebuilt. Code 2.014 → 2.024: core A L2 36,068 → 33,406 bytes (now
+  three blocks), core B L2 31,626 → 28,234 (two blocks); L1 code ~32 KB each, unchanged in size.
+  Functions (counted by LINK = 0xE800): 327 → 330; 5 byte-identical, 128 with the same length:
+  mostly the same code recompiled and relocated, plus changes not identified. Pinning those down
+  needs a Blackfin disassembler (GNU binutils `bfin-elf-objdump`; Capstone and Ghidra have none).
+
 ## Next project: in-camera 14-bit DNG (idea) — full plan in `docs/DNG_PLAN.md`
 
 RAW dump (per m8raw2dng2 docs/PROCESSING.md): 21,049,052 bytes = 54 header u16 + 2,647 rows ×
