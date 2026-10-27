@@ -771,9 +771,7 @@ Idea under study: INFO screen lists profile files on the card, SET loads one for
   TRIX; each identified from RAW vs JPG on neutral pixels (median 0.8–2.0 levels; the next-best
   curve clearly worse). The list, selection and "Loaded" worked. MODERNDR was shot at normal
   exposure (it is meant for −1 EV).
-- **Open: GUI colour format.** "Loaded" is drawn with 0x3E47 (green if RGB565) but showed **yellow**
-  on the camera; greys (bar, footer) look right. The colour word is not plain RGB565; check before
-  relying on warning colours.
+  "Loaded" showed in green (0x3E47): the GUI colours are RGB565 as assumed.
 
 ## Known 2.024 issue
 
