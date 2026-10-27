@@ -59,6 +59,9 @@ are marked **[tested]**.
 layout and rules, byte-identical FPGA, M16C, FSL, fonts, frame-line images and
 translations. Of the 859 KB PXA image only 531 bytes differ: build dates, version
 strings, new lens names in 2.024, and one ~400-byte code change at 0xAE8BC.
+Re-checked 2026-10-27, lump by lump: BF replaced (134,522 → 128,348 bytes); LUTS: GAMMA, GAIN,
+LEICA, BLEMISH, WREF identical, OBJ (lens table) 2 bytes, VERSION string; everything else
+identical. So the JPG tone curves are the same in both versions.
 
 ## Update file format (`.upd`)
 
