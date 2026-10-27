@@ -210,10 +210,8 @@ The script:
 | Option 2, 2.014 | `55264b11f86dd66e61f1412c5c341afdaa8553ce0d10ade270e52de1f24c944c` |
 | Option 1 + `--info`, 2.014 | `fa4ae63a22e2df9749e989ccc570808ac24dabe1a3992593c4c37d27ad6c1c43` |
 | Option 2 + `--info`, 2.014 | `32e6854ec0bc451667ef4f8f6b40dfb4c8af406a43db84e94b90abeb380408f8` |
+| Option 1 + `--profiles`, 2.014 | `e170f4493f8562cf7ce67bdb286b27bdc9a089898f12b48b1916af99a4fb8f9d` |
 | Option 2 + `--profiles`, 2.014 | `d7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14` |
-
-Option 1 + `--profiles` is built and emulator-tested but not yet camera-tested, so the script
-refuses it for now.
 
 ## Flash it
 

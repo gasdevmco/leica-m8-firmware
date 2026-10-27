@@ -35,7 +35,7 @@ Needs only Python 3 (standard library).
 """
 import hashlib, os, sys
 
-VERSION = '0.4.0'                   # project version (CHANGELOG.md), not a Leica firmware version
+VERSION = '0.5.0'                   # project version (CHANGELOG.md), not a Leica firmware version
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, 'tools'))
 from m8_rawpatch import KNOWN_INPUTS, PATCHES as RAW_PATCHES, find_lump
@@ -54,11 +54,11 @@ TESTED = {
                                     'tested on a camera (2026-10-23)'),
     ('dng', '2.014', 'profiles'): ('d7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14',
                                    'tested on a camera (2026-10-27)'),
+    ('raw-menu', '2.014', 'profiles'): ('e170f4493f8562cf7ce67bdb286b27bdc9a089898f12b48b1916af99a4fb8f9d',
+                                        'tested on a camera (2026-10-27)'),
 }
 # Built and emulator-tested, waiting for a camera test: refused until then.
-PENDING = {
-    ('raw-menu', '2.014', 'profiles'): 'e170f4493f8562cf7ce67bdb286b27bdc9a089898f12b48b1916af99a4fb8f9d',
-}
+PENDING = {}
 ADDON_STAGE = {('raw-menu', 'info'): 10, ('dng', 'info'): 8,          # m8_dngpatch stages
                ('raw-menu', 'profiles'): 14, ('dng', 'profiles'): 13}
 ADDON_TEXT = {'info': ' + INFO Camera stats (experimental)',

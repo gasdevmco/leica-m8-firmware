@@ -772,6 +772,9 @@ Idea under study: INFO screen lists profile files on the card, SET loads one for
   curve clearly worse). The list, selection and "Loaded" worked. MODERNDR was shot at normal
   exposure (it is meant for −1 EV).
   "Loaded" showed in green (0x3E47): the GUI colours are RGB565 as assumed.
+- **Stage 14 (Option 1 + picker, `e170f449…`; picker bytes identical to stage 13)**: m8_infotest
+  86/0, m8_inforender 44/0, m8_savetest 39/0; flashed and camera-tested 2026-10-27 (owner's report,
+  no files analysed).
 
 ## Known 2.024 issue
 

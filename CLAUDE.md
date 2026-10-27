@@ -21,7 +21,7 @@ Stage 12 (MODERN built in as the default, `5af5aa1c…`) was flashed and worked,
 loads a profile.** **Stage 13** = stage 8 + picture-profile picker (INFO → Camera stats; UP → list of
 `\PROFILES\*.LUT`, UP/DOWN choose, SET loads until power-off; `d7a17ef2…`, **flashed and camera-tested
 2026-10-27**, on the author's camera). Roll back to stage 8. **Stage 14** = Option 1 + the same picker
-(`e170f449…`, emulator-tested; refused by m8patch until camera-tested).
+(`e170f449…`, camera-tested 2026-10-27 per the owner).
 
 Read `docs/FINDINGS.md` first — it holds every address, offset, hash and conclusion so far.
 For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constraints, firmware leads and step-by-step work plan.
@@ -32,7 +32,7 @@ For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constrain
 - `m8patch.py` — user front end: `python3 m8patch.py raw-menu|dng stock.upd [--info|--profiles] [--out-dir DIR]` → `build/`
   (Option 1 = RAW patch, Option 2 = stage 4; `--info`: stage 10 / stage 8; `--profiles`: stage 14 / stage 13).
   Writes only results matching the camera-tested hashes (`TESTED`; `PENDING` = built but refused until
-  camera-tested: Option 1 + `--profiles`); never overwrites. `m8patch.py profiles stock.upd X.ncp|dir|modern …
+  camera-tested); never overwrites. `m8patch.py profiles stock.upd X.ncp|dir|modern …
   [--base srgb|modern|leica]` → `build/PROFILES/NAME.LUT` + `LEICA.LUT` (via tools/m8_profile.py).
 - `tools/split_upd.py` — `python3 tools/split_upd.py firmware/stock/m8-2_014.upd work/split-2.014`
 - `tools/armtools.py` — Capstone helpers (dis, xrefs, callers); defaults to `work/split-2.014/PXA.bin`

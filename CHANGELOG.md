@@ -3,13 +3,12 @@
 Versions of this project (not Leica firmware versions). Every build is for Leica M8 firmware **2.014**.
 Hashes are the SHA-256 of the file `m8patch.py` writes; if yours differs, don't flash it.
 
-## Unreleased (v0.5.0)
+## v0.5.0 — 2026-10-27
 
 - **New add-on, `--profiles` (experimental), for either option:** Camera stats plus a
   picture-profile picker. INFO → UP lists the `.LUT` files in the card's `PROFILES` folder; SET
   loads one as the JPG tone curve until power-off. The camera's own curves stay the default.
-  Option 2 + `--profiles` is camera-tested (`d7a17ef2…`); Option 1 + `--profiles` is built and
-  emulator-tested, refused until camera-tested.
+  Both options with `--profiles` are camera-tested.
 - **New command, `m8patch.py profiles`:** turns Nikon Picture Control files (`.ncp`), curve-point
   files or the built-in `modern` / `moderndr` curves into a card-ready `PROFILES` folder (always
   with `LEICA.LUT`). Profiles keep the Contrast setting working and look the same in every colour
@@ -18,6 +17,18 @@ Hashes are the SHA-256 of the file `m8patch.py` writes; if yours differs, don't 
   curves from your RAW files), `tools/m8_curvetest.py`; picker tests in `m8_infotest.py` /
   `m8_inforender.py`.
 - Tried and rolled back: a build with the `MODERN` curve built in as the default (stage 12).
+- README: Safety section states the three RAW-patch instructions and when card recovery works;
+  where to get the stock 2.014 file; the 2.024 downgrade note.
+- Options without an add-on, and with `--info`, are unchanged (same hashes as v0.4.0).
+
+| Build | SHA-256 | Tested on a camera |
+|---|---|---|
+| 1 `raw-menu` | `f6589c41a583d1a44fbce77c4acda707640d255acec97a0d2e1ac829c2e70396` | yes (2026-10-19) |
+| 2 `dng` | `55264b11f86dd66e61f1412c5c341afdaa8553ce0d10ade270e52de1f24c944c` | yes (2026-10-21) |
+| 1 `raw-menu --info` | `fa4ae63a22e2df9749e989ccc570808ac24dabe1a3992593c4c37d27ad6c1c43` | yes (2026-10-23) |
+| 2 `dng --info` | `32e6854ec0bc451667ef4f8f6b40dfb4c8af406a43db84e94b90abeb380408f8` | yes (2026-10-23) |
+| 1 `raw-menu --profiles` | `e170f4493f8562cf7ce67bdb286b27bdc9a089898f12b48b1916af99a4fb8f9d` | yes (2026-10-27) |
+| 2 `dng --profiles` | `d7a17ef25309af7780f24bc2bf240bfd8e68cb6e4edb6aa0845e07524d273b14` | yes (2026-10-27) |
 
 ## v0.4.0 — 2026-10-23
 
