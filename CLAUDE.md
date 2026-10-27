@@ -19,8 +19,8 @@ the next JPG uses the curve (`luttests/`). Roll back to stage 8.
 Stage 12 (MODERN built in as the default, `5af5aa1c…`) was flashed and worked, then rolled back
 2026-10-27. **Owner's decision: stock curves stay the camera's default; JPGs change only when the user
 loads a profile.** **Stage 13** = stage 8 + picture-profile picker (INFO → Camera stats; UP → list of
-`\PROFILES\*.LUT`, UP/DOWN choose, SET loads until power-off; `d7a17ef2…`, emulator-tested, not yet
-flashed). Roll back to stage 8.
+`\PROFILES\*.LUT`, UP/DOWN choose, SET loads until power-off; `d7a17ef2…`, **flashed and camera-tested
+2026-10-27**, on the author's camera). Roll back to stage 8.
 
 Read `docs/FINDINGS.md` first — it holds every address, offset, hash and conclusion so far.
 For Goal 2, read `docs/DNG_PLAN.md` — the agreed approach, tag list, constraints, firmware leads and step-by-step work plan.

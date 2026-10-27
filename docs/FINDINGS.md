@@ -764,7 +764,16 @@ Idea under study: INFO screen lists profile files on the card, SET loads one for
 - Build `d7a17ef2…`: m8_infotest 74/0 (INFO opens as stage 8 plus the page byte), m8_inforender
   44/0 (fake card with junk files; every key, every load outcome, directory and file always
   closed, buffer always released, stores only stack / state / dialog+0 / framebuffer),
-  m8_savetest 49/0. Not flashed.
+  m8_savetest 49/0.
+- **Stage 13 camera test (2026-10-27) [tested]:** `L1032015`–`L1032023` (sRGB, Contrast Standard),
+  one frame per profile in `\PROFILES` directory order: first frame Leica stock (stage 12's MODERN
+  gone), then CANON5D2, EKTA, KODACHRM, LEICA (= stock, from LEICA.LUT), MODERN, MODERNDR, PORTRA,
+  TRIX; each identified from RAW vs JPG on neutral pixels (median 0.8–2.0 levels; the next-best
+  curve clearly worse). The list, selection and "Loaded" worked. MODERNDR was shot at normal
+  exposure (it is meant for −1 EV).
+- **Open: GUI colour format.** "Loaded" is drawn with 0x3E47 (green if RGB565) but showed **yellow**
+  on the camera; greys (bar, footer) look right. The colour word is not plain RGB565; check before
+  relying on warning colours.
 
 ## Known 2.024 issue
 
