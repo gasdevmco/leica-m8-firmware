@@ -65,9 +65,9 @@ def main():
         d.line([(0, yy), (W * S, yy)], fill=tuple(int(a + (b - a) * t) for a, b in zip(BG_TOP, BG_BOT)))
     camera(d)
     x0 = 640
-    d.text(s(x0, 150), 'leica-m8-14bit-dng', font=font('Menlo.ttc', 50, 1), fill=(244, 245, 247))
-    d.text(s(x0, 222), '14-bit DNG, written by the camera itself.', font=font('HelveticaNeue.ttc', 29), fill=DIM)
-    d.text(s(x0, 260), 'Firmware patches for the Leica M8.', font=font('HelveticaNeue.ttc', 29), fill=DIM)
+    d.text(s(x0, 150), 'leica-m8-firmware', font=font('Menlo.ttc', 50, 1), fill=(244, 245, 247))
+    d.text(s(x0, 222), 'Firmware patches for the Leica M8.', font=font('HelveticaNeue.ttc', 29), fill=DIM)
+    d.text(s(x0, 260), '14-bit DNG in the camera, and more.', font=font('HelveticaNeue.ttc', 29), fill=DIM)
     lab = font('Menlo.ttc', 22)
     d.text(s(x0, 352), '8-bit', font=lab, fill=DIM)
     ramp(img, x0 + 104, 340, 480, 46, steps=20)
@@ -75,7 +75,7 @@ def main():
     d.text(s(x0, 426), '14-bit', font=lab, fill=ACCENT)
     ramp(img, x0 + 104, 414, 480, 46)
     d.rectangle(s(x0 + 104, 414, x0 + 584, 460), outline=(70, 74, 82), width=S)
-    d.text(s(x0, 520), 'persistent RAW  ·  in-camera DNG  ·  emulator-tested  ·  MIT',
+    d.text(s(x0, 520), 'persistent RAW  ·  in-camera DNG  ·  INFO screen  ·  MIT',
            font=font('HelveticaNeue.ttc', 21), fill=(118, 124, 134))
     img = img.resize((W, H), Image.LANCZOS)
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)

@@ -1,4 +1,4 @@
-# leica-m8-14bit-dng
+# leica-m8-firmware
 
 Tools for patching the firmware of the **Leica M8** so it can:
 
